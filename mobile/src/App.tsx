@@ -206,7 +206,7 @@ export default function App() {
           </Tag>
         }
       >
-        TypeWithMobile
+        AirVoice
       </NavBar>
 
       <div className="message-list" ref={listRef}>
@@ -250,16 +250,24 @@ export default function App() {
             autoSize={{ minRows: 1, maxRows: 4 }}
             onEnterPress={() => handleSend()}
           />
-          <div className="mode-trigger" onClick={() => setModeVisible(true)}>
-            {modeLabels[sendMode]} <DownOutline />
+          <div className="send-button-group">
+            <Button
+              className="send-btn"
+              color="primary"
+              disabled={!input.trim() || !connected}
+              onClick={() => handleSend()}
+            >
+              {modeLabels[sendMode]}
+            </Button>
+            <Button
+              className="mode-btn"
+              color="primary"
+              fill="outline"
+              onClick={() => setModeVisible(true)}
+            >
+              <DownOutline />
+            </Button>
           </div>
-          <Button
-            color="primary"
-            disabled={!input.trim() || !connected}
-            onClick={() => handleSend()}
-          >
-            <SendOutline />
-          </Button>
         </div>
         <SafeArea position="bottom" />
       </div>

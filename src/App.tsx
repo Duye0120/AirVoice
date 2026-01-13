@@ -28,7 +28,7 @@ export default function App() {
   return (
     <div className="container">
       <div className="header">
-        <span className="title">TypeWithMobile</span>
+        <span className="title">AirVoice</span>
         <button className="close-btn" onClick={() => window.close()}>✕</button>
       </div>
 

@@ -1,7 +1,7 @@
 {
-  "name": "type-with-mobile",
-  "version": "1.0.0",
-  "description": "使用手机语音输入到PC",
+  "name": "air-voice",
+  "version": "0.0.1",
+  "description": "使用手机语音输入到电脑",
   "main": "dist/electron/main.js",
   "scripts": {
     "dev:mobile": "vite --config mobile/vite.config.ts",
@@ -44,8 +44,8 @@
     "vite": "^5.0.0"
   },
   "build": {
-    "appId": "com.typewithmobile.app",
-    "productName": "TypeWithMobile",
+    "appId": "com.airvoice.app",
+    "productName": "AirVoice",
     "directories": {
       "output": "release"
     },

@@ -57,7 +57,7 @@ function createTrayIcon(connected: boolean): Electron.NativeImage {
 export function createTray({ showQRWindow, getState }: TrayOptions): void {
   const state = getState();
   tray = new Tray(createTrayIcon(state.connected));
-  tray.setToolTip('TypeWithMobile');
+  tray.setToolTip('AirVoice');
 
   const updateMenu = () => {
     const state = getState();

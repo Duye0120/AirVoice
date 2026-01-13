@@ -21,7 +21,7 @@ Individual build commands:
 This is an Electron app that enables mobile voice input to PC via LAN WebSocket.
 
 **Data Flow:**
-1. Mobile browser connects via WebSocket with token auth
+1. Mobile browser connects via WebSocket (LAN)
 2. User types/speaks text on mobile
 3. Text sent to Electron main process via WebSocket
 4. PC simulates Ctrl+V using Windows SendInput API (koffi)
