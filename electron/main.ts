@@ -49,6 +49,9 @@ app.whenReady().then(() => {
     onConnection: (connected) => {
       if (mainWindow) {
         mainWindow.webContents.send('connection-status', connected);
+        if (connected) {
+          mainWindow.hide();
+        }
       }
     }
   });

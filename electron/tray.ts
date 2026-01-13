@@ -8,12 +8,15 @@ interface TrayOptions {
   getState: () => ServerState;
 }
 
-function createTrayIcon(): Electron.NativeImage {
+function createTrayIcon(connected: boolean): Electron.NativeImage {
   // 创建 32x32 的图标
   const size = 32;
   const canvas = Buffer.alloc(size * size * 4);
 
-  // 绘制蓝色圆形背景 + 白色 T 字母
+  // 颜色：已连接=绿色，未连接=蓝色
+  const color = connected ? { r: 52, g: 199, b: 89 } : { r: 0, g: 122, b: 255 };
+
+  // 绘制圆形背景 + 白色 T 字母
   for (let y = 0; y < size; y++) {
     for (let x = 0; x < size; x++) {
       const idx = (y * size + x) * 4;
@@ -32,10 +35,10 @@ function createTrayIcon(): Electron.NativeImage {
           canvas[idx + 2] = 255; // B
           canvas[idx + 3] = 255; // A
         } else {
-          // 蓝色背景
-          canvas[idx] = 0;       // R
-          canvas[idx + 1] = 122; // G
-          canvas[idx + 2] = 255; // B
+          // 背景色
+          canvas[idx] = color.r;
+          canvas[idx + 1] = color.g;
+          canvas[idx + 2] = color.b;
           canvas[idx + 3] = 255; // A
         }
       } else {
@@ -52,13 +55,13 @@ function createTrayIcon(): Electron.NativeImage {
 }
 
 export function createTray({ showQRWindow, getState }: TrayOptions): void {
-  const icon = createTrayIcon();
-
-  tray = new Tray(icon);
+  const state = getState();
+  tray = new Tray(createTrayIcon(state.connected));
   tray.setToolTip('TypeWithMobile');
 
   const updateMenu = () => {
     const state = getState();
+    tray?.setImage(createTrayIcon(state.connected));
     const contextMenu = Menu.buildFromTemplate([
       {
         label: state.connected ? '● 已连接' : '○ 未连接',

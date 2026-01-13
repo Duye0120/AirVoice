@@ -65,5 +65,5 @@ export function typeText(text: string, execute?: boolean): void {
 
   SendInput(inputs.length, inputs, koffi.sizeof(INPUT));
 
-  setTimeout(() => clipboard.writeText(oldClipboard), 100);
+  setTimeout(() => clipboard.writeText(oldClipboard), 200);
 }

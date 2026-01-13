@@ -4,13 +4,45 @@ import path from 'path';
 import http from 'http';
 import crypto from 'crypto';
 import os from 'os';
+import fs from 'fs';
+import { app } from 'electron';
 import type { ServerState, ServerCallbacks, WebSocketMessage } from './types';
 
 const PORT = 23456;
+const DEV_PORT = 5173; // vite dev server port
+const isDev = process.env.NODE_ENV === 'development';
+
 let token = crypto.randomBytes(16).toString('hex');
 let connected = false;
 let wsClient: WebSocket | null = null;
 let callbacks: ServerCallbacks = {};
+
+// 历史记录存储
+const historyPath = path.join(app.getPath('userData'), 'history.json');
+
+interface HistoryItem {
+  text: string;
+  time: number;
+}
+
+function loadHistory(): HistoryItem[] {
+  try {
+    if (fs.existsSync(historyPath)) {
+      return JSON.parse(fs.readFileSync(historyPath, 'utf-8'));
+    }
+  } catch {}
+  return [];
+}
+
+function saveHistory(history: HistoryItem[]): void {
+  fs.writeFileSync(historyPath, JSON.stringify(history.slice(0, 50)));
+}
+
+function addHistory(text: string): void {
+  const history = loadHistory();
+  history.unshift({ text, time: Date.now() });
+  saveHistory(history);
+}
 
 function getLocalIP(): string {
   const interfaces = os.networkInterfaces();
@@ -45,12 +77,23 @@ function getLocalIP(): string {
 
 export function startServer(cbs: ServerCallbacks): void {
   callbacks = cbs;
-  const app = express();
-  const server = http.createServer(app);
+  const expressApp = express();
+  const server = http.createServer(expressApp);
 
-  app.use(express.static(path.join(__dirname, '../mobile')));
+  // 开发模式：代理到 vite dev server
+  if (isDev) {
+    const { createProxyMiddleware } = require('http-proxy-middleware');
+    expressApp.use('/', createProxyMiddleware({
+      target: `http://localhost:${DEV_PORT}`,
+      changeOrigin: true,
+      ws: false,
+      filter: (req: any) => !req.url.startsWith('/api'),
+    }));
+  } else {
+    expressApp.use(express.static(path.join(__dirname, '../mobile')));
+  }
 
-  app.get('/api/verify', (req, res) => {
+  expressApp.get('/api/verify', (req, res) => {
     if (req.query.token === token) {
       res.json({ success: true });
     } else {
@@ -58,8 +101,16 @@ export function startServer(cbs: ServerCallbacks): void {
     }
   });
 
-  app.get('/api/info', (_req, res) => {
+  expressApp.get('/api/info', (_req, res) => {
     res.json({ ip: getLocalIP(), port: PORT, token });
+  });
+
+  expressApp.get('/api/history', (req, res) => {
+    if (req.query.token !== token) {
+      res.status(401).json({ success: false });
+      return;
+    }
+    res.json(loadHistory().slice(0, 20));
   });
 
   const wss = new WebSocketServer({ server });
@@ -80,6 +131,7 @@ export function startServer(cbs: ServerCallbacks): void {
         const msg: WebSocketMessage = JSON.parse(data.toString());
         if (msg.type === 'text' && msg.content) {
           callbacks.onText?.(msg.content, msg.execute);
+          addHistory(msg.content);
           ws.send(JSON.stringify({ type: 'ack', id: msg.id }));
         }
       } catch {}
