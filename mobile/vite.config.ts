@@ -12,5 +12,10 @@ export default defineConfig({
   },
   css: {
     postcss: resolve(__dirname, '..')
+  },
+  resolve: {
+    alias: {
+      '@shared': resolve(__dirname, '../shared')
+    }
   }
 });

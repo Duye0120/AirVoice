@@ -1,7 +1,9 @@
 import { Tray, Menu, nativeImage, app } from 'electron';
 import type { ServerState } from './types';
+import { serverEvents } from './server';
 
 let tray: Tray | null = null;
+let lastConnected: boolean | null = null;
 
 interface TrayOptions {
   showQRWindow: () => void;
@@ -58,10 +60,14 @@ export function createTray({ showQRWindow, getState }: TrayOptions): void {
   const state = getState();
   tray = new Tray(createTrayIcon(state.connected));
   tray.setToolTip('AirVoice');
+  lastConnected = state.connected;
 
   const updateMenu = () => {
     const state = getState();
-    tray?.setImage(createTrayIcon(state.connected));
+    if (lastConnected !== state.connected) {
+      tray?.setImage(createTrayIcon(state.connected));
+      lastConnected = state.connected;
+    }
     const contextMenu = Menu.buildFromTemplate([
       {
         label: state.connected ? '● 已连接' : '○ 未连接',
@@ -80,8 +86,18 @@ export function createTray({ showQRWindow, getState }: TrayOptions): void {
     tray?.setContextMenu(contextMenu);
   };
 
+  // 初始更新
   updateMenu();
-  setInterval(updateMenu, 2000);
+
+  // 监听连接状态变化事件
+  serverEvents.on('connection-changed', () => {
+    updateMenu();
+  });
+
+  // 监听 IP 变化事件
+  serverEvents.on('ip-changed', () => {
+    updateMenu();
+  });
 
   tray.on('click', showQRWindow);
 }

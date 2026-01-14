@@ -18,7 +18,8 @@
   },
   "include": [
     "src/**/*",
-    "mobile/src/**/*"
+    "mobile/src/**/*",
+    "shared/**/*"
   ],
   "exclude": [
     "node_modules",

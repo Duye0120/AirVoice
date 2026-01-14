@@ -18,11 +18,20 @@ export default function App() {
       }
     };
 
-    window.electronAPI.onConnectionStatus((status) => {
+    const cleanupConnection = window.electronAPI.onConnectionStatus((status) => {
       setConnected(status);
     });
 
+    const cleanupIP = window.electronAPI.onIPChanged((data) => {
+      setServerInfo({ ip: data.ip, port: data.port });
+      setQrCode(data.qrCode);
+    });
+
     init();
+    return () => {
+      cleanupConnection();
+      cleanupIP();
+    };
   }, []);
 
   return (

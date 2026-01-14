@@ -65,5 +65,22 @@ export function typeText(text: string, execute?: boolean): void {
 
   SendInput(inputs.length, inputs, koffi.sizeof(INPUT));
 
-  setTimeout(() => clipboard.writeText(oldClipboard), 200);
+  // 延迟恢复剪贴板，确保粘贴操作完成
+  // 使用重试机制提高成功率
+  let retryCount = 0;
+  const maxRetries = 3;
+  const restoreClipboard = () => {
+    try {
+      clipboard.writeText(oldClipboard);
+    } catch (err) {
+      retryCount++;
+      if (retryCount < maxRetries) {
+        setTimeout(restoreClipboard, 50);
+      } else {
+        console.warn('Failed to restore clipboard after retries:', err);
+      }
+    }
+  };
+  
+  setTimeout(restoreClipboard, 200);
 }

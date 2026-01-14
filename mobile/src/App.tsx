@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   NavBar,
   SafeArea,
@@ -15,79 +15,13 @@ import {
   DownOutline,
 } from "antd-mobile-icons";
 import "./App.scss";
-
-interface WebSocketMessage {
-  type: "text" | "ack";
-  content?: string;
-  id?: number;
-  execute?: boolean;
-}
+import type { WebSocketMessage, HistoryItem } from '@shared/types';
+import { useWebSocket } from './hooks/useWebSocket';
 
 interface Message {
   id: number;
   text: string;
   status: "sending" | "sent" | "history";
-}
-
-interface HistoryItem {
-  text: string;
-  time: number;
-}
-
-function useWebSocket(onMessage: (msg: WebSocketMessage) => void) {
-  const [connected, setConnected] = useState(false);
-  const wsRef = useRef<WebSocket | null>(null);
-  const reconnectTimer = useRef<number | null>(null);
-
-  useEffect(() => {
-    const connect = () => {
-      if (reconnectTimer.current) {
-        clearTimeout(reconnectTimer.current);
-        reconnectTimer.current = null;
-      }
-      if (wsRef.current?.readyState === WebSocket.OPEN) return;
-      if (wsRef.current) wsRef.current.close();
-
-      const protocol = location.protocol === "https:" ? "wss:" : "ws:";
-      const ws = new WebSocket(`${protocol}//${location.host}`);
-      wsRef.current = ws;
-
-      ws.onopen = () => {
-        setConnected(true);
-      };
-      ws.onclose = () => {
-        setConnected(false);
-        reconnectTimer.current = window.setTimeout(connect, 1000);
-      };
-      ws.onmessage = (e) => {
-        try {
-          onMessage(JSON.parse(e.data));
-        } catch {}
-      };
-    };
-
-    const handleVisibility = () => {
-      if (document.visibilityState === "visible") connect();
-    };
-    document.addEventListener("visibilitychange", handleVisibility);
-    connect();
-
-    return () => {
-      document.removeEventListener("visibilitychange", handleVisibility);
-      if (reconnectTimer.current) clearTimeout(reconnectTimer.current);
-      wsRef.current?.close();
-    };
-  }, []);
-
-  const send = useCallback((data: WebSocketMessage) => {
-    if (wsRef.current?.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify(data));
-      return true;
-    }
-    return false;
-  }, []);
-
-  return { connected, send };
 }
 
 export default function App() {
@@ -116,17 +50,35 @@ export default function App() {
           }))
         );
       })
-      .catch(() => {});
+      .catch((err) => {
+        console.warn('Failed to load history:', err);
+      });
   }, []);
 
-  const { connected, send } = useWebSocket((msg) => {
-    if (msg.type === "ack" && msg.id !== undefined) {
-      setMessages((prev) =>
-        prev.map((m) => (m.id === msg.id ? { ...m, status: "sent" } : m))
-      );
-      navigator.vibrate?.(50);
+  const prevConnectedRef = useRef<boolean>(false);
+  
+  const { connected, send } = useWebSocket({
+    onMessage: (msg) => {
+      if (msg.type === "ack" && msg.id !== undefined) {
+        setMessages((prev) =>
+          prev.map((m) => (m.id === msg.id ? { ...m, status: "sent" } : m))
+        );
+        navigator.vibrate?.(50);
+      }
     }
   });
+
+  // WebSocket 状态变化提示
+  useEffect(() => {
+    if (prevConnectedRef.current !== connected) {
+      if (connected && prevConnectedRef.current === false) {
+        Toast.show({ content: "连接成功", position: "bottom", duration: 2000 });
+      } else if (!connected && prevConnectedRef.current === true) {
+        Toast.show({ content: "连接断开，正在重连...", position: "bottom", duration: 2000 });
+      }
+      prevConnectedRef.current = connected;
+    }
+  }, [connected]);
 
   const handleSend = () => {
     const content = input.trim();
@@ -142,15 +94,23 @@ export default function App() {
   const handleCopy = async (text: string) => {
     try {
       await navigator.clipboard.writeText(text);
-    } catch {
-      const textarea = document.createElement("textarea");
-      textarea.value = text;
-      textarea.style.position = "fixed";
-      textarea.style.opacity = "0";
-      document.body.appendChild(textarea);
-      textarea.select();
-      document.execCommand("copy");
-      document.body.removeChild(textarea);
+    } catch (err) {
+      console.warn('Clipboard API failed, using fallback:', err);
+      try {
+        const textarea = document.createElement("textarea");
+        textarea.value = text;
+        textarea.style.position = "fixed";
+        textarea.style.opacity = "0";
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand("copy");
+        document.body.removeChild(textarea);
+      } catch (fallbackErr) {
+        console.error('Fallback copy method also failed:', fallbackErr);
+        Toast.show({ content: "复制失败", position: "bottom" });
+        setActionVisible(false);
+        return;
+      }
     }
     Toast.show({ content: "已复制", position: "bottom" });
     setActionVisible(false);

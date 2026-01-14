@@ -4,6 +4,7 @@ import path from 'path';
 import http from 'http';
 import os from 'os';
 import fs from 'fs';
+import { EventEmitter } from 'events';
 import { app } from 'electron';
 import type { ServerState, ServerCallbacks, WebSocketMessage } from './types';
 
@@ -14,6 +15,11 @@ const isDev = process.env.NODE_ENV === 'development';
 let connected = false;
 let wsClient: WebSocket | null = null;
 let callbacks: ServerCallbacks = {};
+let currentIP = '127.0.0.1';
+let ipCheckInterval: NodeJS.Timeout | null = null;
+
+// 事件发射器，用于通知连接状态和 IP 变化
+export const serverEvents = new EventEmitter();
 
 // 历史记录存储
 const historyPath = path.join(app.getPath('userData'), 'history.json');
@@ -23,17 +29,29 @@ interface HistoryItem {
   time: number;
 }
 
+let historyCache: HistoryItem[] | null = null;
+let saveTimer: NodeJS.Timeout | null = null;
+
 function loadHistory(): HistoryItem[] {
+  if (historyCache) return historyCache;
   try {
     if (fs.existsSync(historyPath)) {
-      return JSON.parse(fs.readFileSync(historyPath, 'utf-8'));
+      historyCache = JSON.parse(fs.readFileSync(historyPath, 'utf-8'));
+      return historyCache!;
     }
-  } catch {}
-  return [];
+  } catch (err) {
+    console.warn('Failed to load history:', err);
+  }
+  historyCache = [];
+  return historyCache;
 }
 
 function saveHistory(history: HistoryItem[]): void {
-  fs.writeFileSync(historyPath, JSON.stringify(history.slice(0, 50)));
+  historyCache = history;
+  if (saveTimer) clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => {
+    fs.writeFileSync(historyPath, JSON.stringify(history.slice(0, 50)));
+  }, 500);
 }
 
 function addHistory(text: string): void {
@@ -73,6 +91,15 @@ function getLocalIP(): string {
   return '127.0.0.1';
 }
 
+function checkIPChange(): void {
+  const newIP = getLocalIP();
+  if (newIP !== currentIP) {
+    const oldIP = currentIP;
+    currentIP = newIP;
+    serverEvents.emit('ip-changed', { oldIP, newIP });
+  }
+}
+
 export function startServer(cbs: ServerCallbacks): void {
   callbacks = cbs;
   const expressApp = express();
@@ -105,6 +132,7 @@ export function startServer(cbs: ServerCallbacks): void {
     wsClient = ws;
     connected = true;
     callbacks.onConnection?.(true);
+    serverEvents.emit('connection-changed', true);
 
     ws.on('message', (data) => {
       try {
@@ -114,21 +142,37 @@ export function startServer(cbs: ServerCallbacks): void {
           addHistory(msg.content);
           ws.send(JSON.stringify({ type: 'ack', id: msg.id }));
         }
-      } catch {}
+      } catch (err) {
+        console.warn('Failed to parse WebSocket message:', err);
+      }
     });
 
     ws.on('close', () => {
       connected = false;
       wsClient = null;
       callbacks.onConnection?.(false);
+      serverEvents.emit('connection-changed', false);
     });
   });
 
+  // 初始化 IP
+  currentIP = getLocalIP();
+
+  // 启动 IP 变化检测（每 5 秒检查一次）
+  ipCheckInterval = setInterval(checkIPChange, 5000);
+
   server.listen(PORT, '0.0.0.0', () => {
-    console.log(`Server running at http://${getLocalIP()}:${PORT}`);
+    console.log(`Server running at http://${currentIP}:${PORT}`);
   });
 }
 
+export function stopServer(): void {
+  if (ipCheckInterval) {
+    clearInterval(ipCheckInterval);
+    ipCheckInterval = null;
+  }
+}
+
 export function getState(): ServerState {
-  return { ip: getLocalIP(), port: PORT, connected };
+  return { ip: currentIP, port: PORT, connected };
 }

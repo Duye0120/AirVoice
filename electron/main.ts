@@ -2,7 +2,7 @@ import { app, BrowserWindow, globalShortcut, ipcMain } from 'electron';
 import path from 'path';
 import QRCode from 'qrcode';
 import { createTray } from './tray';
-import { startServer, getState } from './server';
+import { startServer, getState, serverEvents, stopServer } from './server';
 import { typeText } from './keyboard';
 
 let mainWindow: BrowserWindow | null = null;
@@ -56,6 +56,19 @@ app.whenReady().then(() => {
     }
   });
 
+  // 监听 IP 变化，通知 renderer 刷新二维码
+  serverEvents.on('ip-changed', () => {
+    if (mainWindow) {
+      const state = getState();
+      const url = `http://${state.ip}:${state.port}`;
+      QRCode.toDataURL(url, { width: 200, margin: 1 }).then((qrDataUrl) => {
+        mainWindow?.webContents.send('ip-changed', { ip: state.ip, port: state.port, qrCode: qrDataUrl });
+      }).catch((err) => {
+        console.warn('Failed to generate QR code on IP change:', err);
+      });
+    }
+  });
+
   createTray({ showQRWindow, getState });
 
   globalShortcut.register('Ctrl+Shift+V', () => {
@@ -69,6 +82,7 @@ app.whenReady().then(() => {
 
 app.on('will-quit', () => {
   globalShortcut.unregisterAll();
+  stopServer();
 });
 
 app.on('window-all-closed', (e: Event) => {
