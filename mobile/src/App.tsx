@@ -240,7 +240,6 @@ export default function App() {
             value={input}
             onChange={setInput}
             autoSize={{ minRows: 1, maxRows: 4 }}
-            onEnterPress={() => handleSend()}
           />
           <div className="send-button-group">
             <Button
