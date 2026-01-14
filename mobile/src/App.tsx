@@ -16,8 +16,6 @@ import {
 } from "antd-mobile-icons";
 import "./App.scss";
 
-const token = new URLSearchParams(window.location.search).get("token");
-
 interface WebSocketMessage {
   type: "text" | "ack";
   content?: string;
@@ -38,7 +36,6 @@ interface HistoryItem {
 
 function useWebSocket(onMessage: (msg: WebSocketMessage) => void) {
   const [connected, setConnected] = useState(false);
-  const [tokenInvalid, setTokenInvalid] = useState(false);
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimer = useRef<number | null>(null);
 
@@ -52,19 +49,14 @@ function useWebSocket(onMessage: (msg: WebSocketMessage) => void) {
       if (wsRef.current) wsRef.current.close();
 
       const protocol = location.protocol === "https:" ? "wss:" : "ws:";
-      const ws = new WebSocket(`${protocol}//${location.host}?token=${token}`);
+      const ws = new WebSocket(`${protocol}//${location.host}`);
       wsRef.current = ws;
 
       ws.onopen = () => {
         setConnected(true);
-        setTokenInvalid(false);
       };
-      ws.onclose = (e) => {
+      ws.onclose = () => {
         setConnected(false);
-        if (e.code === 1008) {
-          setTokenInvalid(true);
-          return;
-        }
         reconnectTimer.current = window.setTimeout(connect, 1000);
       };
       ws.onmessage = (e) => {
@@ -95,7 +87,7 @@ function useWebSocket(onMessage: (msg: WebSocketMessage) => void) {
     return false;
   }, []);
 
-  return { connected, send, tokenInvalid };
+  return { connected, send };
 }
 
 export default function App() {
@@ -113,7 +105,7 @@ export default function App() {
 
   // 加载历史记录
   useEffect(() => {
-    fetch(`/api/history?token=${token}`)
+    fetch(`/api/history`)
       .then((r) => r.json())
       .then((history: HistoryItem[]) => {
         setMessages(
@@ -127,7 +119,7 @@ export default function App() {
       .catch(() => {});
   }, []);
 
-  const { connected, send, tokenInvalid } = useWebSocket((msg) => {
+  const { connected, send } = useWebSocket((msg) => {
     if (msg.type === "ack" && msg.id !== undefined) {
       setMessages((prev) =>
         prev.map((m) => (m.id === msg.id ? { ...m, status: "sent" } : m))
@@ -193,7 +185,7 @@ export default function App() {
     listRef.current?.scrollTo(0, listRef.current.scrollHeight);
   }, [messages]);
 
-  const statusText = tokenInvalid ? "请重新扫码" : connected ? "已连接" : "连接中...";
+  const statusText = connected ? "已连接" : "连接中...";
   const statusColor = connected ? "#52c41a" : "#faad14";
 
   return (

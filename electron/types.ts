@@ -1,7 +1,6 @@
 export interface ServerState {
   ip: string;
   port: number;
-  token: string;
   connected: boolean;
 }
 

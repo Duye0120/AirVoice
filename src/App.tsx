@@ -10,7 +10,7 @@ export default function App() {
       try {
         const info = await window.electronAPI.getServerInfo();
         setServerInfo({ ip: info.ip, port: info.port });
-        const url = `http://${info.ip}:${info.port}?token=${info.token}`;
+        const url = `http://${info.ip}:${info.port}`;
         const qrDataUrl = await window.electronAPI.generateQRCode(url);
         setQrCode(qrDataUrl);
       } catch (e) {

@@ -2,7 +2,6 @@ import express from 'express';
 import { WebSocketServer, WebSocket } from 'ws';
 import path from 'path';
 import http from 'http';
-import crypto from 'crypto';
 import os from 'os';
 import fs from 'fs';
 import { app } from 'electron';
@@ -12,7 +11,6 @@ const PORT = 23456;
 const DEV_PORT = 5173; // vite dev server port
 const isDev = process.env.NODE_ENV === 'development';
 
-let token = crypto.randomBytes(16).toString('hex');
 let connected = false;
 let wsClient: WebSocket | null = null;
 let callbacks: ServerCallbacks = {};
@@ -93,35 +91,17 @@ export function startServer(cbs: ServerCallbacks): void {
     expressApp.use(express.static(path.join(__dirname, '../mobile')));
   }
 
-  expressApp.get('/api/verify', (req, res) => {
-    if (req.query.token === token) {
-      res.json({ success: true });
-    } else {
-      res.status(401).json({ success: false });
-    }
-  });
-
   expressApp.get('/api/info', (_req, res) => {
-    res.json({ ip: getLocalIP(), port: PORT, token });
+    res.json({ ip: getLocalIP(), port: PORT });
   });
 
-  expressApp.get('/api/history', (req, res) => {
-    if (req.query.token !== token) {
-      res.status(401).json({ success: false });
-      return;
-    }
+  expressApp.get('/api/history', (_req, res) => {
     res.json(loadHistory().slice(0, 20));
   });
 
   const wss = new WebSocketServer({ server });
 
-  wss.on('connection', (ws, req) => {
-    const url = new URL(req.url || '', `http://${req.headers.host}`);
-    if (url.searchParams.get('token') !== token) {
-      ws.close(1008, 'Invalid token');
-      return;
-    }
-
+  wss.on('connection', (ws, _req) => {
     wsClient = ws;
     connected = true;
     callbacks.onConnection?.(true);
@@ -150,5 +130,5 @@ export function startServer(cbs: ServerCallbacks): void {
 }
 
 export function getState(): ServerState {
-  return { ip: getLocalIP(), port: PORT, token, connected };
+  return { ip: getLocalIP(), port: PORT, connected };
 }
