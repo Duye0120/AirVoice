@@ -63,6 +63,8 @@
   padding: 12px 16px;
   padding-bottom: calc(env(safe-area-inset-bottom) + 12px);
   z-index: 100;
+  max-height: 40vh; // 限制最大高度为视口的40%
+  overflow-y: auto; // 超出时可滚动
 
   .input-row {
     display: flex;
@@ -71,6 +73,8 @@
 
     .adm-text-area-wrapper {
       flex: 1;
+      max-height: 30vh; // 限制输入框最大高度
+      overflow-y: auto;
     }
 
     .send-button-group {
