@@ -1,0 +1,3 @@
+{
+  "body": "## 功能特性\n\n- 通过局域网 WebSocket 实现手机语音输入到 PC\n- 二维码快速连接\n- 历史记录\n- 发送模式：发送 / 发送并回车\n- Ant Design Mobile 界面\n- 系统托盘显示连接状态\n\n## Features\n\n- Mobile voice input to PC via LAN WebSocket\n- QR code for quick connection\n- History records\n- Send modes: Send / Send+Enter\n- Ant Design Mobile UI\n- System tray with connection status"
+}
