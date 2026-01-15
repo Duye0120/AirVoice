@@ -9,6 +9,11 @@
     "esModuleInterop": true,
     "resolveJsonModule": true,
     "outDir": "dist/electron",
+    "rootDir": "electron",
+    "baseUrl": ".",
+    "paths": {
+      "@shared/*": ["shared/*"]
+    },
     "declaration": true
   },
   "include": ["electron/**/*.ts"],

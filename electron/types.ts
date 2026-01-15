@@ -9,5 +9,14 @@ export interface ServerCallbacks {
   onConnection?: (connected: boolean) => void;
 }
 
-// 从共享类型导入
-export type { WebSocketMessage, HistoryItem } from '../shared/types';
+export interface WebSocketMessage {
+  type: 'text' | 'ack';
+  content?: string;
+  id?: number;
+  execute?: boolean;
+}
+
+export interface HistoryItem {
+  text: string;
+  time: number;
+}
