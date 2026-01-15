@@ -1,6 +1,6 @@
 {
   "name": "air-voice",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "使用手机语音输入到电脑",
   "main": "dist/electron/main.js",
   "scripts": {
