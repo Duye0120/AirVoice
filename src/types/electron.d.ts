@@ -10,6 +10,8 @@ interface ElectronAPI {
   onIPChanged: (callback: (data: { ip: string; port: number; qrCode: string }) => void) => () => void;
   getServerInfo: () => Promise<ServerState>;
   generateQRCode: (url: string) => Promise<string>;
+  windowMinimize: () => void;
+  windowClose: () => void;
 }
 
 declare global {

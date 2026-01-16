@@ -1,4 +1,4 @@
-import { app, BrowserWindow, globalShortcut, ipcMain } from 'electron';
+import { app, BrowserWindow, globalShortcut, ipcMain, Menu } from 'electron';
 import path from 'path';
 import QRCode from 'qrcode';
 import { createTray } from './tray';
@@ -17,10 +17,10 @@ ipcMain.handle('generate-qrcode', async (_, url: string) => {
 function createQRWindow(): void {
   mainWindow = new BrowserWindow({
     width: 340,
-    height: 500,
-    resizable: false,
+    height: 520,
+    minWidth: 300,
+    minHeight: 400,
     frame: false,
-    transparent: true,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true
@@ -30,6 +30,14 @@ function createQRWindow(): void {
   mainWindow.loadFile(path.join(__dirname, '../renderer/index.html'));
   mainWindow.on('closed', () => { mainWindow = null; });
 }
+
+ipcMain.on('window-minimize', () => {
+  mainWindow?.minimize();
+});
+
+ipcMain.on('window-close', () => {
+  mainWindow?.hide();
+});
 
 function showQRWindow(): void {
   if (mainWindow) {
@@ -41,6 +49,8 @@ function showQRWindow(): void {
 }
 
 app.whenReady().then(() => {
+  Menu.setApplicationMenu(null);
+  
   startServer({
     onText: (text, execute) => {
       lastText = text;

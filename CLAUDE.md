@@ -2,6 +2,12 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Important Rules
+
+**NEVER push to remote repository unless explicitly requested by the user.**
+
+Only run `git push` when the user specifically asks to push changes.
+
 ## Build Commands
 
 ```bash
@@ -40,3 +46,10 @@ This is an Electron app that enables mobile voice input to PC via LAN WebSocket.
 ## Platform
 
 Windows only (uses koffi for user32.dll SendInput API).
+
+## Development Workflow
+
+完成一个功能后，必须在 `plan/CHANGELOG.md` 中记录更新内容，包括：
+- 功能描述
+- 修改的文件
+- 注意事项（如有）

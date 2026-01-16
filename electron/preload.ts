@@ -12,5 +12,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     return () => ipcRenderer.removeListener('ip-changed', handler);
   },
   getServerInfo: () => ipcRenderer.invoke('get-server-info'),
-  generateQRCode: (url: string) => ipcRenderer.invoke('generate-qrcode', url)
+  generateQRCode: (url: string) => ipcRenderer.invoke('generate-qrcode', url),
+  windowMinimize: () => ipcRenderer.send('window-minimize'),
+  windowClose: () => ipcRenderer.send('window-close')
 });

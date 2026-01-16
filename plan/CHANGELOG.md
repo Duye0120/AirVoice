@@ -4,6 +4,28 @@
 
 通过局域网将手机语音输入的文字发送到 PC，模拟键盘输入。
 
+## 更新记录
+
+### 2026-01-16 - 自定义标题栏（标题居中）
+
+**功能描述：**
+- 移除原生标题栏，实现自定义标题栏
+- 标题 "TypeWithMobile" 居中显示
+- 添加最小化和关闭按钮
+
+**修改的文件：**
+- `electron/main.ts` - 设置 `frame: false`，添加窗口控制 IPC 处理
+- `electron/preload.ts` - 暴露 `windowMinimize` 和 `windowClose` API
+- `src/App.tsx` - 添加自定义标题栏组件
+- `src/index.css` - 添加标题栏样式（拖拽区域、按钮悬停效果）
+- `src/types/electron.d.ts` - 更新 TypeScript 类型定义
+- `CLAUDE.md` - 添加开发规范（完成功能后记录更新）
+
+**注意事项：**
+- 标题栏使用 `-webkit-app-region: drag` 实现拖拽
+- 关闭按钮点击后隐藏窗口（不退出应用）
+- 按钮区域设置 `-webkit-app-region: no-drag` 避免拖拽冲突
+
 ## 已完成步骤
 
 ### 1. 项目初始化

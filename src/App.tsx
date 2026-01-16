@@ -36,9 +36,12 @@ export default function App() {
 
   return (
     <div className="container">
-      <div className="header">
-        <span className="title">AirVoice</span>
-        <button className="close-btn" onClick={() => window.close()}>✕</button>
+      <div className="titlebar">
+        <span className="title">TypeWithMobile</span>
+        <div className="window-controls">
+          <button className="control-btn minimize" onClick={() => window.electronAPI.windowMinimize()}>−</button>
+          <button className="control-btn close" onClick={() => window.electronAPI.windowClose()}>×</button>
+        </div>
       </div>
 
       <div className="qr-container">
