@@ -1,18 +1,17 @@
 import { useState, useEffect, useRef } from "react";
 import {
-  NavBar,
   SafeArea,
   TextArea,
   Button,
   Toast,
-  List,
-  Tag,
   ActionSheet,
   Dialog,
 } from "antd-mobile";
 import {
-  SendOutline,
   DownOutline,
+  ClockCircleOutline,
+  CheckCircleFill,
+  CloseCircleOutline,
 } from "antd-mobile-icons";
 import "./App.scss";
 import type { WebSocketMessage, HistoryItem } from '@shared/types';
@@ -56,7 +55,7 @@ export default function App() {
   }, []);
 
   const prevConnectedRef = useRef<boolean>(false);
-  
+
   const { connected, send } = useWebSocket({
     onMessage: (msg) => {
       if (msg.type === "ack" && msg.id !== undefined) {
@@ -74,7 +73,7 @@ export default function App() {
       if (connected && prevConnectedRef.current === false) {
         Toast.show({ content: "连接成功", position: "bottom", duration: 2000 });
       } else if (!connected && prevConnectedRef.current === true) {
-        Toast.show({ content: "连接断开，正在重连...", position: "bottom", duration: 2000 });
+        Toast.show({ content: "连接断开，正在重连…", position: "bottom", duration: 2000 });
       }
       prevConnectedRef.current = connected;
     }
@@ -145,83 +144,110 @@ export default function App() {
     listRef.current?.scrollTo(0, listRef.current.scrollHeight);
   }, [messages]);
 
-  const statusText = connected ? "已连接" : "连接中...";
-  const statusColor = connected ? "#52c41a" : "#faad14";
+  const getStatusIcon = (status: Message["status"]) => {
+    switch (status) {
+      case "sent":
+        return <CheckCircleFill className="status-icon success" />;
+      case "history":
+        return <ClockCircleOutline className="status-icon history" />;
+      default:
+        return <span className="status-icon sending" />;
+    }
+  };
+
+  const getStatusText = (status: Message["status"]) => {
+    switch (status) {
+      case "sent":
+        return "已输入";
+      case "history":
+        return "历史";
+      default:
+        return "发送中";
+    }
+  };
 
   return (
     <div className="app">
-      <NavBar
-        backIcon={null}
-        right={
-          <Tag color={connected ? "success" : "warning"} fill="outline">
-            {statusText}
-          </Tag>
-        }
-      >
-        AirVoice
-      </NavBar>
+      {/* 顶部导航 */}
+      <header className="header">
+        <div className="header-content">
+          <h1 className="app-title">AirVoice</h1>
+          <div className={`status-badge ${connected ? 'connected' : 'connecting'}`}>
+            <span className="status-dot" aria-hidden="true" />
+            <span>{connected ? "已连接" : "连接中"}</span>
+          </div>
+        </div>
+      </header>
 
-      <div className="message-list" ref={listRef}>
+      {/* 消息列表 */}
+      <main className="message-list" ref={listRef}>
         {messages.length === 0 ? (
           <div className="empty">
-            <div className="empty-icon">⌨️</div>
-            <div className="empty-title">发送文字到电脑</div>
-            <div className="empty-desc">输入或使用语音输入文字</div>
+            <div className="empty-visual" aria-hidden="true">
+              <div className="empty-circle">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                  <path d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+              </div>
+            </div>
+            <h2 className="empty-title">发送文字到电脑</h2>
+            <p className="empty-desc">在下方输入文字，即时同步到 PC</p>
           </div>
         ) : (
-          <List>
+          <div className="messages">
             {messages.map((m) => (
-              <List.Item
+              <article
                 key={m.id}
+                className={`message-card ${m.status}`}
                 onClick={() => handleMsgClick(m)}
-                description={
-                  <span style={{ color: m.status === "sent" ? statusColor : "#999" }}>
-                    {m.status === "sent" ? "已输入 ✓" : m.status === "history" ? "历史" : "发送中..."}
-                  </span>
-                }
-                className={m.status === "history" ? "history-item" : ""}
               >
-                {m.text}
-              </List.Item>
+                <p className="message-text">{m.text}</p>
+                <div className="message-meta">
+                  {getStatusIcon(m.status)}
+                  <span className="message-status">{getStatusText(m.status)}</span>
+                </div>
+              </article>
             ))}
             {messages.length > 0 && (
-              <List.Item onClick={handleClearAll}>
-                <span style={{ color: "#999", fontSize: 14 }}>清空历史</span>
-              </List.Item>
+              <button className="clear-btn" onClick={handleClearAll}>
+                <CloseCircleOutline />
+                <span>清空历史</span>
+              </button>
             )}
-          </List>
+          </div>
         )}
-      </div>
+      </main>
 
-      <div className="input-area">
-        <div className="input-row">
+      {/* 底部输入区 */}
+      <footer className="input-area">
+        <div className="input-container">
           <TextArea
-            placeholder="输入文字..."
+            placeholder="输入文字…"
             value={input}
             onChange={setInput}
             autoSize={{ minRows: 1, maxRows: 4 }}
+            aria-label="输入要发送到电脑的文字"
           />
-          <div className="send-button-group">
+          <div className="send-group">
             <Button
               className="send-btn"
-              color="primary"
               disabled={!input.trim() || !connected}
               onClick={() => handleSend()}
+              aria-label={`${modeLabels[sendMode]}文字到电脑`}
             >
               {modeLabels[sendMode]}
             </Button>
-            <Button
+            <button
               className="mode-btn"
-              color="primary"
-              fill="outline"
               onClick={() => setModeVisible(true)}
+              aria-label="切换发送模式"
             >
-              <DownOutline />
-            </Button>
+              <DownOutline aria-hidden="true" />
+            </button>
           </div>
         </div>
         <SafeArea position="bottom" />
-      </div>
+      </footer>
 
       <ActionSheet
         visible={modeVisible}

@@ -39,19 +39,27 @@ export default function App() {
       <div className="titlebar">
         <span className="title">TypeWithMobile</span>
         <div className="window-controls">
-          <button className="control-btn minimize" onClick={() => window.electronAPI.windowMinimize()}>−</button>
-          <button className="control-btn close" onClick={() => window.electronAPI.windowClose()}>×</button>
+          <button
+            className="control-btn minimize"
+            onClick={() => window.electronAPI.windowMinimize()}
+            aria-label="最小化窗口"
+          >−</button>
+          <button
+            className="control-btn close"
+            onClick={() => window.electronAPI.windowClose()}
+            aria-label="关闭窗口"
+          >×</button>
         </div>
       </div>
 
       <div className="qr-container">
         <div className="qrcode">
-          {qrCode ? <img src={qrCode} alt="QR" /> : '加载中...'}
+          {qrCode ? <img src={qrCode} alt="扫描此二维码连接手机" width={180} height={180} /> : '加载中…'}
         </div>
       </div>
 
-      <div className="status">
-        <span className={`status-dot ${connected ? 'connected' : ''}`} />
+      <div className="status" role="status" aria-live="polite">
+        <span className={`status-dot ${connected ? 'connected' : ''}`} aria-hidden="true" />
         <span className="status-text">{connected ? '已连接' : '等待连接'}</span>
       </div>
 

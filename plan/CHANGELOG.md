@@ -6,6 +6,53 @@
 
 ## 更新记录
 
+### 2026-01-16 - 移动端 UI 现代化升级
+
+**功能描述：**
+- 全新的现代化设计系统，采用 Apple 风格的设计语言
+- 玻璃拟态效果（Glassmorphism）应用于顶部导航和底部输入区
+- 全新的消息卡片设计，带有状态指示边框
+- 优化的空状态页面，带有浮动动画图标
+- 更圆润的按钮和输入框设计
+- 发送中状态显示旋转加载动画
+- 使用 Inter 字体提升可读性
+- 优化的深色模式配色
+
+**修改的文件：**
+- `mobile/src/App.tsx` - 重构组件结构，使用语义化 HTML 标签
+- `mobile/src/App.scss` - 全新的现代化样式设计
+- `mobile/src/index.css` - 新的设计系统变量（玻璃拟态、卡片、输入框）
+
+**设计亮点：**
+- 顶部导航和底部输入区使用 `backdrop-filter: blur(20px)` 实现毛玻璃效果
+- 消息卡片左侧边框颜色指示状态（绿色=已发送，蓝色=发送中）
+- 发送按钮使用渐变背景
+- 空状态图标有轻微的浮动动画
+- 所有动画支持 `prefers-reduced-motion`
+
+### 2026-01-16 - Web Interface Guidelines 无障碍性改进
+
+**功能描述：**
+- 根据 Vercel Web Interface Guidelines 改进 PC 端和手机端的无障碍性
+- 添加 `aria-label` 到所有图标按钮
+- 添加 `color-scheme` 声明支持系统主题
+- 添加 `prefers-reduced-motion` 支持减少动画
+- 修复 `transition: all` 性能问题
+- 添加 `touch-action: manipulation` 优化触摸体验
+- 使用正确的省略号字符 `…` 替代 `...`
+- 为图片添加明确的宽高属性
+
+**修改的文件：**
+- `src/App.tsx` - 添加 aria-label、aria-live、aria-hidden 属性
+- `src/index.css` - 添加 color-scheme、focus-visible 状态、prefers-reduced-motion
+- `mobile/src/App.tsx` - 添加 aria-label、aria-hidden 属性，修复省略号
+- `mobile/src/App.scss` - 修复 transition: all，添加 prefers-reduced-motion
+- `mobile/src/index.css` - 添加 color-scheme、touch-action
+
+**注意事项：**
+- 所有动画在用户开启减少动画偏好时会被禁用
+- 窗口控制按钮现在有可见的焦点状态
+
 ### 2026-01-16 - 自定义标题栏（标题居中）
 
 **功能描述：**

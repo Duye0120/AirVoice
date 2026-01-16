@@ -8,7 +8,9 @@
       "Bash(git:*)",
       "WebFetch(domain:stackoverflow.com)",
       "WebFetch(domain:github.com)",
-      "WebFetch(domain:npmjs.com)"
+      "WebFetch(domain:npmjs.com)",
+      "Skill(web-design-guidelines)",
+      "WebFetch(domain:raw.githubusercontent.com)"
     ]
   }
 }

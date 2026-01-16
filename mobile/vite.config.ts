@@ -6,6 +6,19 @@ export default defineConfig({
   plugins: [react()],
   root: resolve(__dirname),
   base: './',
+  server: {
+    port: 8081,
+    proxy: {
+      '/api': {
+        target: 'http://localhost:23456',
+        changeOrigin: true
+      },
+      '/ws': {
+        target: 'ws://localhost:23456',
+        ws: true
+      }
+    }
+  },
   build: {
     outDir: '../dist/mobile',
     emptyOutDir: true

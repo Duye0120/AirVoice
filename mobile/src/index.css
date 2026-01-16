@@ -1,43 +1,94 @@
-@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Outfit:wght@400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 :root {
-  --bg: #ffffff;
-  --surface: #f5f5f5;
-  --surface-2: #ebebeb;
-  --border: #e5e5e5;
-  --text: #18181b;
-  --text-dim: #52525b;
-  --accent: #0891b2;
-  --accent-glow: rgba(8, 145, 178, 0.1);
-  --success: #16a34a;
-  --warning: #d97706;
+  color-scheme: light;
+
+  /* 基础色 */
+  --bg: #f5f5f7;
+  --surface: #ffffff;
+  --surface-2: #e5e5e7;
+  --border: #d1d1d6;
+
+  /* 文字 */
+  --text: #1d1d1f;
+  --text-dim: #86868b;
+
+  /* 强调色 */
+  --accent: #007aff;
+  --accent-dark: #0056b3;
+  --accent-glow: rgba(0, 122, 255, 0.15);
+
+  /* 状态色 */
+  --success: #34c759;
+  --warning: #ff9500;
+
+  /* 玻璃拟态 */
+  --glass-bg: rgba(255, 255, 255, 0.72);
+  --glass-border: rgba(0, 0, 0, 0.06);
+
+  /* 卡片 */
+  --card-bg: #ffffff;
+  --card-border: rgba(0, 0, 0, 0.06);
+
+  /* 输入框 */
+  --input-bg: #ffffff;
+  --input-border: #d1d1d6;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #0a0a0b;
-    --surface: #141416;
-    --surface-2: #1a1a1d;
-    --border: #27272a;
-    --text: #fafafa;
-    --text-dim: #a1a1aa;
-    --accent: #22d3ee;
-    --accent-glow: rgba(34, 211, 238, 0.12);
-    --success: #4ade80;
-    --warning: #fbbf24;
+    color-scheme: dark;
+
+    /* 基础色 */
+    --bg: #000000;
+    --surface: #1c1c1e;
+    --surface-2: #2c2c2e;
+    --border: #38383a;
+
+    /* 文字 */
+    --text: #f5f5f7;
+    --text-dim: #98989d;
+
+    /* 强调色 */
+    --accent: #0a84ff;
+    --accent-dark: #0066cc;
+    --accent-glow: rgba(10, 132, 255, 0.2);
+
+    /* 状态色 */
+    --success: #30d158;
+    --warning: #ff9f0a;
+
+    /* 玻璃拟态 */
+    --glass-bg: rgba(28, 28, 30, 0.72);
+    --glass-border: rgba(255, 255, 255, 0.08);
+
+    /* 卡片 */
+    --card-bg: #1c1c1e;
+    --card-border: rgba(255, 255, 255, 0.08);
+
+    /* 输入框 */
+    --input-bg: #1c1c1e;
+    --input-border: #38383a;
   }
 }
 
 * {
   -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
 }
 
 html, body, #root {
   height: 100%;
   overflow: hidden;
   background: var(--bg);
+}
+
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
