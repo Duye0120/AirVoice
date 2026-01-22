@@ -2,8 +2,10 @@ import { app, BrowserWindow, globalShortcut, ipcMain, Menu } from 'electron';
 import path from 'path';
 import QRCode from 'qrcode';
 import { createTray } from './tray';
-import { startServer, getState, serverEvents, stopServer } from './server';
+import { startServer, getState, serverEvents, stopServer, loadHistory, saveHistory } from './server';
 import { typeText } from './keyboard';
+import { getConfig, saveConfig, getRoleConfig, saveRoleConfig, type AIConfig, type RoleConfig } from './config';
+import { optimizeText } from './ai';
 
 let mainWindow: BrowserWindow | null = null;
 let lastText = '';
@@ -14,12 +16,29 @@ ipcMain.handle('generate-qrcode', async (_, url: string) => {
   return await QRCode.toDataURL(url, { width: 200, margin: 1 });
 });
 
+ipcMain.handle('get-ai-config', () => getConfig());
+
+ipcMain.handle('save-ai-config', (_, config: Partial<AIConfig>) => saveConfig(config));
+
+ipcMain.handle('get-role-config', () => getRoleConfig());
+
+ipcMain.handle('save-role-config', (_, config: Partial<RoleConfig>) => saveRoleConfig(config));
+
+ipcMain.handle('optimize-text', async (_, text: string) => optimizeText(text));
+
+ipcMain.handle('get-history', () => loadHistory());
+
+ipcMain.handle('clear-history', () => {
+  saveHistory([]);
+  return true;
+});
+
 function createQRWindow(): void {
   mainWindow = new BrowserWindow({
-    width: 340,
-    height: 520,
-    minWidth: 300,
-    minHeight: 400,
+    width: 900,
+    height: 640,
+    minWidth: 600,
+    minHeight: 500,
     frame: false,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),

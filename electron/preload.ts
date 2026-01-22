@@ -14,5 +14,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getServerInfo: () => ipcRenderer.invoke('get-server-info'),
   generateQRCode: (url: string) => ipcRenderer.invoke('generate-qrcode', url),
   windowMinimize: () => ipcRenderer.send('window-minimize'),
-  windowClose: () => ipcRenderer.send('window-close')
+  windowClose: () => ipcRenderer.send('window-close'),
+  getAIConfig: () => ipcRenderer.invoke('get-ai-config'),
+  saveAIConfig: (config: Record<string, unknown>) => ipcRenderer.invoke('save-ai-config', config),
+  getRoleConfig: () => ipcRenderer.invoke('get-role-config'),
+  saveRoleConfig: (config: Record<string, unknown>) => ipcRenderer.invoke('save-role-config', config),
+  optimizeText: (text: string) => ipcRenderer.invoke('optimize-text', text),
+  getHistory: () => ipcRenderer.invoke('get-history'),
+  clearHistory: () => ipcRenderer.invoke('clear-history'),
 });

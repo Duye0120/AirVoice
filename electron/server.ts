@@ -7,9 +7,11 @@ import fs from 'fs';
 import { EventEmitter } from 'events';
 import { app } from 'electron';
 import type { ServerState, ServerCallbacks, WebSocketMessage } from './types';
+import { optimizeText } from './ai';
+import { getConfig } from './config';
 
 const PORT = 23456;
-const DEV_PORT = 5173; // vite dev server port
+const DEV_PORT = 8081;
 const isDev = process.env.NODE_ENV === 'development';
 
 let connected = false;
@@ -18,10 +20,8 @@ let callbacks: ServerCallbacks = {};
 let currentIP = '127.0.0.1';
 let ipCheckInterval: NodeJS.Timeout | null = null;
 
-// 事件发射器，用于通知连接状态和 IP 变化
 export const serverEvents = new EventEmitter();
 
-// 历史记录存储
 const historyPath = path.join(app.getPath('userData'), 'history.json');
 
 interface HistoryItem {
@@ -32,7 +32,7 @@ interface HistoryItem {
 let historyCache: HistoryItem[] | null = null;
 let saveTimer: NodeJS.Timeout | null = null;
 
-function loadHistory(): HistoryItem[] {
+export function loadHistory(): HistoryItem[] {
   if (historyCache) return historyCache;
   try {
     if (fs.existsSync(historyPath)) {
@@ -46,7 +46,7 @@ function loadHistory(): HistoryItem[] {
   return historyCache;
 }
 
-function saveHistory(history: HistoryItem[]): void {
+export function saveHistory(history: HistoryItem[]): void {
   historyCache = history;
   if (saveTimer) clearTimeout(saveTimer);
   saveTimer = setTimeout(() => {
@@ -100,12 +100,23 @@ function checkIPChange(): void {
   }
 }
 
+function isAIEnabled(): boolean {
+  const config = getConfig();
+  const providerConfig = config.providers[config.provider];
+  return config.optimizeMode !== 'off' && !!providerConfig.apiKey;
+}
+
+function sendToClient(msg: WebSocketMessage): void {
+  if (wsClient?.readyState === WebSocket.OPEN) {
+    wsClient.send(JSON.stringify(msg));
+  }
+}
+
 export function startServer(cbs: ServerCallbacks): void {
   callbacks = cbs;
   const expressApp = express();
   const server = http.createServer(expressApp);
 
-  // 开发模式：代理到 vite dev server
   if (isDev) {
     const { createProxyMiddleware } = require('http-proxy-middleware');
     expressApp.use('/', createProxyMiddleware({
@@ -128,19 +139,70 @@ export function startServer(cbs: ServerCallbacks): void {
 
   const wss = new WebSocketServer({ server });
 
-  wss.on('connection', (ws, _req) => {
+  wss.on('connection', (ws) => {
     wsClient = ws;
     connected = true;
     callbacks.onConnection?.(true);
     serverEvents.emit('connection-changed', true);
 
-    ws.on('message', (data) => {
+    // Send AI config status on connection
+    sendToClient({ type: 'ai-config', aiEnabled: isAIEnabled() });
+    // Send history on connection
+    sendToClient({ type: 'history', history: loadHistory().slice(0, 20) });
+
+    ws.on('message', async (data) => {
       try {
         const msg: WebSocketMessage = JSON.parse(data.toString());
+        
         if (msg.type === 'text' && msg.content) {
+          // Direct send (AI off or auto mode)
+          const config = getConfig();
+          const providerConfig = config.providers[config.provider];
+          let finalText = msg.content;
+          
+          if (config.optimizeMode === 'auto' && providerConfig.apiKey) {
+            finalText = await optimizeText(msg.content);
+          }
+          
+          callbacks.onText?.(finalText, msg.execute);
+          addHistory(finalText);
+          sendToClient({ type: 'ack', id: msg.id });
+        }
+        
+        else if (msg.type === 'optimize' && msg.content) {
+          // Request AI optimization, return result for preview
+          try {
+            const optimized = await optimizeText(msg.content);
+            sendToClient({
+              type: 'optimized',
+              id: msg.id,
+              original: msg.content,
+              optimized,
+              execute: msg.execute
+            });
+          } catch (err) {
+            // On error, return original text
+            sendToClient({
+              type: 'optimized',
+              id: msg.id,
+              original: msg.content,
+              optimized: msg.content,
+              execute: msg.execute
+            });
+          }
+        }
+        
+        else if (msg.type === 'confirm' && msg.content) {
+          // User confirmed, execute paste
           callbacks.onText?.(msg.content, msg.execute);
           addHistory(msg.content);
-          ws.send(JSON.stringify({ type: 'ack', id: msg.id }));
+          sendToClient({ type: 'ack', id: msg.id });
+        }
+        
+        else if (msg.type === 'clear-history') {
+          // Clear history
+          saveHistory([]);
+          sendToClient({ type: 'history', history: [] });
         }
       } catch (err) {
         console.warn('Failed to parse WebSocket message:', err);
@@ -155,10 +217,7 @@ export function startServer(cbs: ServerCallbacks): void {
     });
   });
 
-  // 初始化 IP
   currentIP = getLocalIP();
-
-  // 启动 IP 变化检测（每 5 秒检查一次）
   ipCheckInterval = setInterval(checkIPChange, 5000);
 
   server.listen(PORT, '0.0.0.0', () => {
@@ -175,4 +234,9 @@ export function stopServer(): void {
 
 export function getState(): ServerState {
   return { ip: currentIP, port: PORT, connected };
+}
+
+// Notify client when AI config changes
+export function notifyAIConfigChanged(): void {
+  sendToClient({ type: 'ai-config', aiEnabled: isAIEnabled() });
 }

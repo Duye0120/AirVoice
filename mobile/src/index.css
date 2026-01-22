@@ -1,94 +1,116 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
-
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  color-scheme: light;
-
-  /* 基础色 */
-  --bg: #f5f5f7;
-  --surface: #ffffff;
-  --surface-2: #e5e5e7;
-  --border: #d1d1d6;
-
-  /* 文字 */
-  --text: #1d1d1f;
-  --text-dim: #86868b;
-
-  /* 强调色 */
-  --accent: #007aff;
-  --accent-dark: #0056b3;
-  --accent-glow: rgba(0, 122, 255, 0.15);
-
-  /* 状态色 */
-  --success: #34c759;
-  --warning: #ff9500;
-
-  /* 玻璃拟态 */
-  --glass-bg: rgba(255, 255, 255, 0.72);
-  --glass-border: rgba(0, 0, 0, 0.06);
-
-  /* 卡片 */
-  --card-bg: #ffffff;
-  --card-border: rgba(0, 0, 0, 0.06);
-
-  /* 输入框 */
-  --input-bg: #ffffff;
-  --input-border: #d1d1d6;
-}
-
-@media (prefers-color-scheme: dark) {
+@layer base {
   :root {
-    color-scheme: dark;
+    --background: 0 0% 98%;
+    --foreground: 222.2 84% 4.9%;
+    --card: 0 0% 100%;
+    --card-foreground: 222.2 84% 4.9%;
+    --primary: 221.2 83.2% 53.3%;
+    --primary-foreground: 210 40% 98%;
+    --secondary: 210 40% 96.1%;
+    --secondary-foreground: 222.2 47.4% 11.2%;
+    --muted: 210 40% 96.1%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+    --accent: 210 40% 96.1%;
+    --accent-foreground: 222.2 47.4% 11.2%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 221.2 83.2% 53.3%;
+    --radius: 0.75rem;
+    --success: 142 76% 36%;
+    --warning: 38 92% 50%;
+  }
 
-    /* 基础色 */
-    --bg: #000000;
-    --surface: #1c1c1e;
-    --surface-2: #2c2c2e;
-    --border: #38383a;
-
-    /* 文字 */
-    --text: #f5f5f7;
-    --text-dim: #98989d;
-
-    /* 强调色 */
-    --accent: #0a84ff;
-    --accent-dark: #0066cc;
-    --accent-glow: rgba(10, 132, 255, 0.2);
-
-    /* 状态色 */
-    --success: #30d158;
-    --warning: #ff9f0a;
-
-    /* 玻璃拟态 */
-    --glass-bg: rgba(28, 28, 30, 0.72);
-    --glass-border: rgba(255, 255, 255, 0.08);
-
-    /* 卡片 */
-    --card-bg: #1c1c1e;
-    --card-border: rgba(255, 255, 255, 0.08);
-
-    /* 输入框 */
-    --input-bg: #1c1c1e;
-    --input-border: #38383a;
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --background: 222.2 84% 4.9%;
+      --foreground: 210 40% 98%;
+      --card: 222.2 84% 4.9%;
+      --card-foreground: 210 40% 98%;
+      --primary: 217.2 91.2% 59.8%;
+      --primary-foreground: 222.2 47.4% 11.2%;
+      --secondary: 217.2 32.6% 17.5%;
+      --secondary-foreground: 210 40% 98%;
+      --muted: 217.2 32.6% 17.5%;
+      --muted-foreground: 215 20.2% 65.1%;
+      --accent: 217.2 32.6% 17.5%;
+      --accent-foreground: 210 40% 98%;
+      --destructive: 0 62.8% 30.6%;
+      --destructive-foreground: 210 40% 98%;
+      --border: 217.2 32.6% 17.5%;
+      --input: 217.2 32.6% 17.5%;
+      --ring: 224.3 76.3% 48%;
+      --success: 142 71% 45%;
+      --warning: 38 92% 50%;
+    }
   }
 }
 
-* {
-  -webkit-tap-highlight-color: transparent;
-  touch-action: manipulation;
+@layer base {
+  * {
+    @apply border-border;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+  }
+  
+  html, body, #root {
+    height: 100%;
+    overflow: hidden;
+  }
+  
+  body {
+    @apply bg-background text-foreground;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
 }
 
-html, body, #root {
-  height: 100%;
-  overflow: hidden;
-  background: var(--bg);
+/* Animations */
+@keyframes pulse-slow {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
 }
 
-body {
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+@keyframes spin {
+  to { transform: rotate(360deg); }
 }
+
+@keyframes slide-up {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+
+.animate-pulse-slow {
+  animation: pulse-slow 2s ease-in-out infinite;
+}
+
+.animate-spin {
+  animation: spin 1s linear infinite;
+}
+
+.animate-slide-up {
+  animation: slide-up 0.3s ease-out;
+}
+
+/* Safe area */
+.safe-top {
+  padding-top: env(safe-area-inset-top);
+}
+
+.safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* Custom utilities */
+.bg-success { background-color: hsl(var(--success)); }
+.text-success { color: hsl(var(--success)); }
+.bg-warning { background-color: hsl(var(--warning)); }
+.text-warning { color: hsl(var(--warning)); }
+.border-success { border-color: hsl(var(--success)); }
+.border-primary { border-color: hsl(var(--primary)); }

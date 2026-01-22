@@ -35,13 +35,23 @@ This is an Electron app that enables mobile voice input to PC via LAN WebSocket.
 **Three Build Targets:**
 - `electron/` → `dist/electron/` - Main process (Express server, WebSocket, keyboard simulation)
 - `src/` → `dist/renderer/` - PC QR code window (React)
-- `mobile/` → `dist/mobile/` - Mobile web interface (React + Ant Design Mobile)
+- `mobile/` → `dist/mobile/` - Mobile web interface (React + shadcn/ui style)
 
 **Key Implementation Details:**
 - Keyboard input uses clipboard + Ctrl+V (not SendInput for text) for Warp terminal compatibility
 - Token-based auth prevents unauthorized access
 - History stored in `app.getPath('userData')/history.json`
 - System tray with dynamic icon color (green=connected, blue=disconnected)
+
+**AI Integration:**
+- `electron/config.ts` - Config storage (ai-config.json, roles.json)
+- `electron/ai.ts` - AI text optimization using Vercel AI SDK
+- Supports OpenAI, Anthropic, Google providers with BYOK
+- `shared/types.ts` - Shared WebSocket message types
+
+**UI Components:**
+- `src/components/ui/` - shadcn/ui components (Button, Input, Select, Switch, Card, etc.)
+- `src/lib/utils.ts` - cn() utility for className merging
 
 ## Platform
 
