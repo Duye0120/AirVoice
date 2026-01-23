@@ -394,6 +394,18 @@ npm run dev:mobile
 - `tailwind.config.cjs` - 扩展 sans 字体族
 - `src/index.css` - 更新 body font-family 并添加表单元素字体继承
 
+### 2026-01-23 - 修复移动端输入框高度异常
+
+**功能描述：**
+- 修复移动端输入框高度过大的问题
+- 输入框从固定7行改为1行起始，随内容自动扩展
+- 移除 minHeight 限制，让输入框自然高度
+- 最大高度从 300px 调整为 150px
+- 减小内边距，优化视觉效果
+
+**修改的文件：**
+- `mobile/src/App.tsx` - 调整 textarea 的 rows、style 和 className
+
 ### 2026-01-21 - UI 样式优化 (字体与输入框)
 
 **功能描述：**

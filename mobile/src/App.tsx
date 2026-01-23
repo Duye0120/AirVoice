@@ -326,12 +326,12 @@ export default function App() {
         <div className="flex items-end gap-2 p-4">
           <textarea
             ref={textareaRef}
-            className="flex-1 bg-muted rounded-2xl px-6 py-4 text-[17px] font-sans placeholder:text-muted-foreground resize-none outline-none focus:ring-2 focus:ring-ring/30 transition-shadow"
+            className="flex-1 bg-muted rounded-2xl px-4 py-3 text-[17px] font-sans placeholder:text-muted-foreground resize-none outline-none focus:ring-2 focus:ring-ring/30 transition-shadow"
             placeholder={aiEnabled ? "输入文字，AI 会优化..." : "输入文字..."}
             value={input}
             onChange={handleTextareaChange}
-            rows={7}
-            style={{ maxHeight: '300px', minHeight: '140px' }}
+            rows={1}
+            style={{ maxHeight: '150px' }}
           />
           <div className="flex flex-shrink-0">
             <button
