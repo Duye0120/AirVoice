@@ -11,7 +11,11 @@
       "WebFetch(domain:npmjs.com)",
       "Skill(web-design-guidelines)",
       "WebFetch(domain:raw.githubusercontent.com)",
-      "Bash(echo:*)"
+      "Bash(echo:*)",
+      "Bash(\"/c/Program Files/GitHub CLI/gh.exe\":*)",
+      "Bash(\"/c/Program Files \\(x86\\)/GitHub CLI/gh.exe\":*)",
+      "Bash(\"/c/Program Files/GitHub CLI/gh.exe\" release create:*)",
+      "Bash(\"/c/Program Files/GitHub CLI/gh.exe\" release upload:*)"
     ]
   }
 }
