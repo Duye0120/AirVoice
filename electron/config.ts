@@ -33,6 +33,12 @@ export interface RoleConfig {
   roles: RolePrompt[];
 }
 
+export interface ImageSettings {
+  cacheDir: string;
+  cleanupIntervalMinutes: number;
+  fallbackToPathWhenPasteFails: boolean;
+}
+
 export const DEFAULT_PROMPT = `你是一个文字整理助手。用户通过语音输入文字，请：
 1. 去除口语填充词和语气词（嗯、啊、那个、就是说、然后等）
 2. 适度润色语句，使其更通顺，但必须保持原意
@@ -92,8 +98,16 @@ function readLegacyCustomPrompt(): string | null {
 
 let configCache: AIConfig | null = null;
 let roleConfigCache: RoleConfig | null = null;
+let imageSettingsCache: ImageSettings | null = null;
 const getConfigPath = () => path.join(app.getPath('userData'), 'ai-config.json');
 const getRoleConfigPath = () => path.join(app.getPath('userData'), 'roles.json');
+const getImageSettingsPath = () => path.join(app.getPath('userData'), 'image-settings.json');
+
+const defaultImageSettings: ImageSettings = {
+  cacheDir: path.join(app.getPath('userData'), 'image-cache'),
+  cleanupIntervalMinutes: 60,
+  fallbackToPathWhenPasteFails: true,
+};
 
 export function loadConfig(): AIConfig {
   if (configCache) return configCache;
@@ -199,4 +213,63 @@ export function getConfig(): AIConfig {
 
 export function getRoleConfig(): RoleConfig {
   return loadRoleConfig();
+}
+
+export function loadImageSettings(): ImageSettings {
+  if (imageSettingsCache) return imageSettingsCache;
+
+  try {
+    const settingsPath = getImageSettingsPath();
+    if (fs.existsSync(settingsPath)) {
+      const saved = JSON.parse(fs.readFileSync(settingsPath, 'utf-8')) as Partial<ImageSettings>;
+      imageSettingsCache = {
+        ...defaultImageSettings,
+        ...saved,
+        cacheDir: typeof saved?.cacheDir === 'string' && saved.cacheDir.trim()
+          ? saved.cacheDir.trim()
+          : defaultImageSettings.cacheDir,
+        cleanupIntervalMinutes: typeof saved?.cleanupIntervalMinutes === 'number'
+          ? Math.max(0, Math.floor(saved.cleanupIntervalMinutes))
+          : defaultImageSettings.cleanupIntervalMinutes,
+        fallbackToPathWhenPasteFails: typeof saved?.fallbackToPathWhenPasteFails === 'boolean'
+          ? saved.fallbackToPathWhenPasteFails
+          : defaultImageSettings.fallbackToPathWhenPasteFails,
+      };
+      return imageSettingsCache;
+    }
+  } catch (err) {
+    console.warn('Failed to load image settings:', err);
+  }
+
+  imageSettingsCache = { ...defaultImageSettings };
+  return imageSettingsCache;
+}
+
+export function saveImageSettings(settings: Partial<ImageSettings>): ImageSettings {
+  const current = loadImageSettings();
+  const nextSettings: ImageSettings = {
+    ...current,
+    ...settings,
+    cacheDir: typeof settings?.cacheDir === 'string' && settings.cacheDir.trim()
+      ? settings.cacheDir.trim()
+      : current.cacheDir,
+    cleanupIntervalMinutes: typeof settings?.cleanupIntervalMinutes === 'number'
+      ? Math.max(0, Math.floor(settings.cleanupIntervalMinutes))
+      : current.cleanupIntervalMinutes,
+    fallbackToPathWhenPasteFails: typeof settings?.fallbackToPathWhenPasteFails === 'boolean'
+      ? settings.fallbackToPathWhenPasteFails
+      : current.fallbackToPathWhenPasteFails,
+  };
+
+  imageSettingsCache = nextSettings;
+  try {
+    fs.writeFileSync(getImageSettingsPath(), JSON.stringify(nextSettings, null, 2));
+  } catch (err) {
+    console.warn('Failed to save image settings:', err);
+  }
+  return nextSettings;
+}
+
+export function getImageSettings(): ImageSettings {
+  return loadImageSettings();
 }

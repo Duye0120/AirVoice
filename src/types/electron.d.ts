@@ -36,8 +36,16 @@ interface RoleConfig {
   roles: RolePrompt[];
 }
 
+interface ImageSettings {
+  cacheDir: string;
+  cleanupIntervalMinutes: number;
+  fallbackToPathWhenPasteFails: boolean;
+}
+
 interface HistoryItem {
-  text: string;
+  text?: string;
+  kind?: 'text' | 'image';
+  imageName?: string;
   time: number;
 }
 
@@ -52,6 +60,9 @@ interface ElectronAPI {
   saveAIConfig: (config: Partial<AIConfig>) => Promise<AIConfig>;
   getRoleConfig: () => Promise<RoleConfig>;
   saveRoleConfig: (config: Partial<RoleConfig>) => Promise<RoleConfig>;
+  getImageSettings: () => Promise<ImageSettings>;
+  saveImageSettings: (settings: Partial<ImageSettings>) => Promise<ImageSettings>;
+  pickImageCacheDir: () => Promise<string | null>;
   optimizeText: (text: string) => Promise<string>;
   getHistory: () => Promise<HistoryItem[]>;
   clearHistory: () => Promise<boolean>;

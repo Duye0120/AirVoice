@@ -1,10 +1,20 @@
-import { app, BrowserWindow, globalShortcut, ipcMain, Menu } from 'electron';
+import { app, BrowserWindow, dialog, globalShortcut, ipcMain, Menu } from 'electron';
 import path from 'path';
 import QRCode from 'qrcode';
 import { createTray } from './tray';
 import { startServer, getState, serverEvents, stopServer, loadHistory, saveHistory } from './server';
-import { typeText } from './keyboard';
-import { getConfig, saveConfig, getRoleConfig, saveRoleConfig, type AIConfig, type RoleConfig } from './config';
+import { typeText, pasteImage } from './keyboard';
+import {
+  getConfig,
+  getImageSettings,
+  getRoleConfig,
+  saveConfig,
+  saveImageSettings,
+  saveRoleConfig,
+  type AIConfig,
+  type ImageSettings,
+  type RoleConfig,
+} from './config';
 import { optimizeText } from './ai';
 
 let mainWindow: BrowserWindow | null = null;
@@ -23,6 +33,25 @@ ipcMain.handle('save-ai-config', (_, config: Partial<AIConfig>) => saveConfig(co
 ipcMain.handle('get-role-config', () => getRoleConfig());
 
 ipcMain.handle('save-role-config', (_, config: Partial<RoleConfig>) => saveRoleConfig(config));
+
+ipcMain.handle('get-image-settings', () => getImageSettings());
+
+ipcMain.handle('save-image-settings', (_, settings: Partial<ImageSettings>) => saveImageSettings(settings));
+
+ipcMain.handle('pick-image-cache-dir', async () => {
+  if (!mainWindow) {
+    return null;
+  }
+  const result = await dialog.showOpenDialog(mainWindow, {
+    properties: ['openDirectory', 'createDirectory'],
+    title: '选择图片缓存目录',
+  });
+
+  if (result.canceled || !result.filePaths?.[0]) {
+    return null;
+  }
+  return result.filePaths[0];
+});
 
 ipcMain.handle('optimize-text', async (_, text: string) => optimizeText(text));
 
@@ -74,6 +103,9 @@ app.whenReady().then(() => {
     onText: (text, execute) => {
       lastText = text;
       typeText(text, execute);
+    },
+    onImage: (imageBuffer, execute) => {
+      return pasteImage(imageBuffer, execute);
     },
     onConnection: (connected) => {
       if (mainWindow) {

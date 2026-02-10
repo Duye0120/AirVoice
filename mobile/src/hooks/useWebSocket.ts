@@ -22,7 +22,10 @@ export function useWebSocket({ onMessage }: UseWebSocketOptions = {}) {
       if (wsRef.current) wsRef.current.close();
 
       const protocol = location.protocol === "https:" ? "wss:" : "ws:";
-      const ws = new WebSocket(`${protocol}//${location.host}`);
+      const backendHost = location.port === '8081'
+        ? `${location.hostname}:23456`
+        : location.host;
+      const ws = new WebSocket(`${protocol}//${backendHost}/ws`);
       wsRef.current = ws;
 
       ws.onopen = () => {

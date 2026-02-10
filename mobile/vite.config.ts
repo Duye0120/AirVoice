@@ -10,11 +10,13 @@ export default defineConfig({
     port: 8081,
     proxy: {
       '/api': {
-        target: 'http://localhost:23456',
-        changeOrigin: true
+        target: 'http://127.0.0.1:23456',
+        changeOrigin: true,
+        timeout: 120000,
+        proxyTimeout: 120000
       },
       '/ws': {
-        target: 'ws://localhost:23456',
+        target: 'ws://127.0.0.1:23456',
         ws: true
       }
     }
