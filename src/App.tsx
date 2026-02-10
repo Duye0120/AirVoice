@@ -44,6 +44,12 @@ interface RoleConfig {
   roles: RolePrompt[];
 }
 
+interface ImageSettings {
+  cacheDir: string;
+  cleanupIntervalMinutes: number;
+  fallbackToPathWhenPasteFails: boolean;
+}
+
 const PROVIDER_OPTIONS = [
   {
     id: 'openai' as AIProvider,
@@ -68,10 +74,21 @@ const PROVIDER_OPTIONS = [
   }
 ];
 
+const IMAGE_CLEANUP_OPTIONS = [
+  { value: 0, label: '不自动清理' },
+  { value: 10, label: '10 分钟' },
+  { value: 30, label: '30 分钟' },
+  { value: 60, label: '1 小时' },
+  { value: 360, label: '6 小时' },
+  { value: 1440, label: '24 小时' },
+];
+
 type Page = 'connection' | 'history' | 'ai' | 'role';
 
 interface HistoryItem {
-  text: string;
+  text?: string;
+  kind?: 'text' | 'image';
+  imageName?: string;
   time: number;
 }
 
@@ -123,6 +140,13 @@ export default function App() {
   const [newRoleName, setNewRoleName] = useState('');
   const [saving, setSaving] = useState(false);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'success'>('idle');
+  const [imageSettings, setImageSettings] = useState<ImageSettings>({
+    cacheDir: '',
+    cleanupIntervalMinutes: 60,
+    fallbackToPathWhenPasteFails: true,
+  });
+  const [savingImageSettings, setSavingImageSettings] = useState(false);
+  const [imageSettingsSaveStatus, setImageSettingsSaveStatus] = useState<'idle' | 'success'>('idle');
   const [history, setHistory] = useState<HistoryItem[]>([]);
 
   useEffect(() => {
@@ -152,6 +176,13 @@ export default function App() {
         
         const historyData = await window.electronAPI.getHistory() as HistoryItem[];
         setHistory(historyData || []);
+
+        const imageConfig = await window.electronAPI.getImageSettings() as ImageSettings;
+        setImageSettings({
+          cacheDir: imageConfig?.cacheDir || '',
+          cleanupIntervalMinutes: imageConfig?.cleanupIntervalMinutes ?? 60,
+          fallbackToPathWhenPasteFails: imageConfig?.fallbackToPathWhenPasteFails ?? true,
+        });
       } catch (e) {
         console.error('Failed to init:', e);
       }
@@ -185,6 +216,33 @@ export default function App() {
     setSaving(false);
   };
 
+  const handleSaveImageSettings = async () => {
+    setSavingImageSettings(true);
+    try {
+      const saved = await window.electronAPI.saveImageSettings(imageSettings);
+      setImageSettings({
+        cacheDir: saved?.cacheDir || imageSettings.cacheDir,
+        cleanupIntervalMinutes: saved?.cleanupIntervalMinutes ?? imageSettings.cleanupIntervalMinutes,
+        fallbackToPathWhenPasteFails: saved?.fallbackToPathWhenPasteFails ?? imageSettings.fallbackToPathWhenPasteFails,
+      });
+      setImageSettingsSaveStatus('success');
+      setTimeout(() => setImageSettingsSaveStatus('idle'), 2000);
+    } catch (e) {
+      console.error('Failed to save image settings:', e);
+    }
+    setSavingImageSettings(false);
+  };
+
+  const handlePickImageCacheDir = async () => {
+    try {
+      const selected = await window.electronAPI.pickImageCacheDir();
+      if (!selected) return;
+      setImageSettings((prev) => ({ ...prev, cacheDir: selected }));
+    } catch (e) {
+      console.error('Failed to pick image cache directory:', e);
+    }
+  };
+
   const updateProviderConfig = (provider: AIProvider, field: keyof ProviderConfig, value: string) => {
     setConfig(prev => ({
       ...prev,
@@ -200,9 +258,10 @@ export default function App() {
 
   const currentProvider = PROVIDER_OPTIONS.find(p => p.id === config.provider)!;
   const currentProviderConfig = config.providers[config.provider];
+  const aiEnabled = config.optimizeMode !== 'off';
 
   return (
-    <div className="h-screen flex flex-col">
+    <div className="desktop-root h-screen flex flex-col">
       {/* Titlebar */}
       <div className="titlebar">
         <span className="titlebar-title">AirVoice</span>
@@ -228,6 +287,13 @@ export default function App() {
       <div className="app-layout">
         {/* Sidebar */}
         <div className="sidebar">
+          <div className="sidebar-header">
+            <div className="brand-badge">A</div>
+            <div>
+              <div className="sidebar-brand-title">AirVoice</div>
+              <div className="sidebar-brand-subtitle">Desktop Console</div>
+            </div>
+          </div>
           <nav className="sidebar-nav">
             <button
               className={`nav-item ${activePage === 'connection' ? 'active' : ''}`}
@@ -267,8 +333,13 @@ export default function App() {
         {/* Content */}
         <main className="main-content">
           {activePage === 'connection' ? (
-            <div className="connection-page font-sans">
-              <h1 className="page-title">连接</h1>
+            <div className="page-shell connection-page font-sans">
+              <div className="page-title-row">
+                <h1 className="page-title">连接</h1>
+                <span className={`status-chip ${aiEnabled ? 'is-on' : 'is-off'}`}>
+                  {aiEnabled ? 'AI 已启用' : 'AI 未启用'}
+                </span>
+              </div>
               
               <div className="qr-container">
                 <div className="qr-frame">
@@ -290,9 +361,72 @@ export default function App() {
                   <span>{connected ? '设备已连接' : '等待连接...'}</span>
                 </div>
               </div>
+
+              <div className="settings-section mt-6">
+                <div className="section-header">
+                  <span>图片缓存设置</span>
+                </div>
+
+                <div className="space-y-4 px-4 pb-4 pt-2">
+                  <div className="form-group">
+                    <Label className="form-label">缓存目录</Label>
+                    <div className="flex gap-2">
+                      <Input
+                        value={imageSettings.cacheDir}
+                        onChange={(e) => setImageSettings((prev) => ({ ...prev, cacheDir: e.target.value }))}
+                        placeholder="选择图片缓存目录"
+                      />
+                      <Button variant="outline" onClick={handlePickImageCacheDir}>选择</Button>
+                    </div>
+                    <p className="form-hint">图片会先保存到此目录，再执行粘贴逻辑。</p>
+                  </div>
+
+                  <div className="form-group">
+                    <Label className="form-label">自动清理间隔</Label>
+                    <Select
+                      value={String(imageSettings.cleanupIntervalMinutes)}
+                      onValueChange={(value) => {
+                        const minutes = Number(value);
+                        setImageSettings((prev) => ({
+                          ...prev,
+                          cleanupIntervalMinutes: Number.isFinite(minutes) ? minutes : prev.cleanupIntervalMinutes,
+                        }));
+                      }}
+                    >
+                      <SelectTrigger className="w-[220px]">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {IMAGE_CLEANUP_OPTIONS.map((option) => (
+                          <SelectItem key={option.value} value={String(option.value)}>{option.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="settings-row">
+                    <div className="settings-label">
+                      <span className="settings-label-title">粘贴失败自动降级路径</span>
+                      <span className="settings-label-desc">目标应用不支持图片时，自动发送图片文件路径</span>
+                    </div>
+                    <Switch
+                      checked={imageSettings.fallbackToPathWhenPasteFails}
+                      onCheckedChange={(checked) => setImageSettings((prev) => ({ ...prev, fallbackToPathWhenPasteFails: checked }))}
+                    />
+                  </div>
+
+                  <Button className="w-full" onClick={handleSaveImageSettings} disabled={savingImageSettings}>
+                    {imageSettingsSaveStatus === 'success'
+                      ? '已保存'
+                      : savingImageSettings
+                        ? '保存中...'
+                        : '保存图片设置'}
+                  </Button>
+                </div>
+              </div>
             </div>
           ) : activePage === 'history' ? (
-            <div>
+            <div className="page-shell">
               <h1 className="page-title">历史记录</h1>
               
               {history.length === 0 ? (
@@ -316,11 +450,11 @@ export default function App() {
                     }
                     
                     acc.push(
-                      <div key={item.time} className="flex items-start gap-4 py-2 border-b border-border/50">
-                        <span className="text-sm text-muted-foreground w-20 flex-shrink-0 tabular-nums">
+                      <div key={item.time} className="history-item">
+                        <span className="history-time text-sm text-muted-foreground w-20 flex-shrink-0 tabular-nums">
                           {formatTime(item.time)}
                         </span>
-                        <p className="text-sm flex-1 break-words">{item.text}</p>
+                        <p className="text-sm flex-1 break-words leading-6">{item?.text ?? `[图片] ${item?.imageName ?? '图片'}`}</p>
                       </div>
                     );
                     
@@ -343,7 +477,7 @@ export default function App() {
               )}
             </div>
           ) : activePage === 'ai' ? (
-            <div>
+            <div className="page-shell">
               <h1 className="page-title">AI 设置</h1>
 
               {/* Text Optimization Section */}
@@ -445,7 +579,7 @@ export default function App() {
               </Button>
             </div>
           ) : (
-            <div>
+            <div className="page-shell">
               <h1 className="page-title">角色设定</h1>
 
               <div className="settings-section">
