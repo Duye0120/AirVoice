@@ -1,7 +1,21 @@
 import { useState, useRef, useEffect } from "react";
 import "./index.css";
-import type { WebSocketMessage } from '@shared/types';
+import type { WebSocketMessage, AgentStepInfo } from '@shared/types';
 import { useWebSocket } from './hooks/useWebSocket';
+import { Button } from '@ui/button';
+import { Textarea } from '@ui/textarea';
+import { Card } from '@ui/card';
+import { Badge } from '@ui/badge';
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from '@ui/sheet';
+import { Toaster } from '@ui/sonner';
+import { toast } from 'sonner';
+import { cn } from '@/lib/utils';
 
 interface Message {
   id: number;
@@ -11,6 +25,9 @@ interface Message {
   imageId?: string;
   imageName?: string;
   time?: number;
+  agentSteps?: AgentStepInfo[];
+  replyMessage?: string;
+  typedText?: string;
 }
 
 interface ImagePreviewData {
@@ -87,6 +104,7 @@ export default function App() {
   const [selectedMsg, setSelectedMsg] = useState<Message | null>(null);
   const [showActionMenu, setShowActionMenu] = useState(false);
   const [aiEnabled, setAiEnabled] = useState(false);
+  const [agentEnabled, setAgentEnabled] = useState(false);
   const [preview, setPreview] = useState<PreviewData | null>(null);
   const [previewText, setPreviewText] = useState("");
   const [imagePreview, setImagePreview] = useState<ImagePreviewData | null>(null);
@@ -115,6 +133,22 @@ export default function App() {
       }
       else if (msg.type === "ai-config") {
         setAiEnabled(!!msg.aiEnabled);
+        setAgentEnabled(!!msg.agentEnabled);
+      }
+      else if (msg.type === "agent-done" && msg.id !== undefined) {
+        setMessages((prev) =>
+          prev.map((m) => {
+            if (m.id !== msg.id) return m;
+            return {
+              ...m,
+              status: 'sent',
+              agentSteps: msg.steps,
+              typedText: msg.typedText,
+              replyMessage: msg.replyMessage,
+            };
+          })
+        );
+        navigator.vibrate?.(50);
       }
       else if (msg.type === "history" && msg.history) {
         setMessages((prev) => {
@@ -164,7 +198,13 @@ export default function App() {
     const id = ++msgIdRef.current;
     const execute = sendMode === "execute";
     
-    if (aiEnabled) {
+    if (agentEnabled) {
+      if (send({ type: "agent", content, id, execute })) {
+        setMessages((prev) => [...prev, { id, text: content, status: "optimizing", kind: 'text', time: Date.now() }]);
+        setInput("");
+        if (textareaRef.current) textareaRef.current.style.height = 'auto';
+      }
+    } else if (aiEnabled) {
       if (send({ type: "optimize", content, id, execute })) {
         setMessages((prev) => [...prev, { id, text: content, status: "optimizing", kind: 'text', time: Date.now() }]);
         setInput("");
@@ -288,19 +328,19 @@ export default function App() {
     if (!file) return;
 
     if (!file.type.startsWith('image/')) {
-      alert('请选择图片文件');
+      toast.error('请选择图片文件');
       return;
     }
 
     if (file.size > MAX_IMAGE_BYTES) {
-      alert('图片不能超过 10MB');
+      toast.error('图片不能超过 10MB');
       return;
     }
 
     try {
       const { blob, mime } = await compressImageForUpload(file);
       if (blob.size > MAX_IMAGE_BYTES) {
-        alert('压缩后图片仍超过 10MB，请选择更小的图片');
+        toast.error('压缩后图片仍超过 10MB，请选择更小的图片');
         return;
       }
 
@@ -342,7 +382,7 @@ export default function App() {
         });
     } catch (err) {
       const message = err instanceof Error ? err.message : '图片处理失败';
-      alert(message);
+      toast.error(message);
     }
   };
 
@@ -442,7 +482,7 @@ export default function App() {
   const handleResend = (message: Message) => {
     const id = ++msgIdRef.current;
     if (message.kind === 'image' && !message.imageId) {
-      alert('该图片已过期，请重新拍照或选择图片');
+      toast.error('该图片已过期，请重新拍照或选择图片');
       setShowActionMenu(false);
       return;
     }
@@ -564,13 +604,16 @@ export default function App() {
         <div className="flex items-center justify-between px-5 py-2">
           <div className="flex items-center gap-3">
             <h1 className="text-lg font-semibold">AirVoice</h1>
-            {aiEnabled && (
-              <span className="px-2 py-0.5 text-xs font-medium bg-primary/10 text-primary rounded-full">AI</span>
-            )}
+            {agentEnabled ? (
+              <Badge variant="secondary" className="rounded-full bg-indigo-500/10 text-indigo-500">Agent</Badge>
+            ) : aiEnabled ? (
+              <Badge variant="secondary" className="rounded-full bg-primary/10 text-primary">AI</Badge>
+            ) : null}
           </div>
-          <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-medium ${
+          <div className={cn(
+            'flex items-center gap-2 rounded-full px-3 py-1.5 text-sm font-medium',
             connected ? 'bg-success/10 text-success' : 'bg-warning/10 text-warning'
-          }`}>
+          )}>
             <span className={`w-2 h-2 rounded-full ${connected ? 'bg-success' : 'bg-warning animate-pulse-slow'}`} />
             <span>{connected ? "已连接" : "连接中"}</span>
           </div>
@@ -629,17 +672,78 @@ export default function App() {
                       </p>
                     </div>
                   ) : (
-                    <div
-                      className={`bg-card rounded-2xl p-4 border cursor-pointer active:scale-[0.98] transition-transform mb-3 ${
-                        m.status === 'sent' ? 'border-l-[3px] border-l-success' : ''
-                      } ${
-                        m.status === 'sending' || m.status === 'optimizing' || m.status === 'uploading' ? 'border-l-[3px] border-l-primary' : ''
-                      } ${
-                        m.status === 'failed' ? 'border-l-[3px] border-l-destructive' : ''
-                      }`}
+                    <Card
+                      className={cn(
+                        'mb-3 cursor-pointer rounded-2xl border p-4 transition-transform active:scale-[0.98]',
+                        m.status === 'sent' && 'border-l-[3px] border-l-success',
+                        (m.status === 'sending' || m.status === 'optimizing' || m.status === 'uploading') && 'border-l-[3px] border-l-primary',
+                        m.status === 'failed' && 'border-l-[3px] border-l-destructive'
+                      )}
                       onClick={() => handleMsgClick(m)}
                     >
                       <p className="text-[15px] leading-relaxed whitespace-pre-wrap break-words mb-3">{m.text}</p>
+                      
+                      {/* Agent UI Area */}
+                      {(m.replyMessage || m.typedText || (m.agentSteps && m.agentSteps.length > 0)) && (
+                        <div className="mb-3 space-y-2 text-sm">
+                          {/* Agent Reply */}
+                          {m.replyMessage && (
+                            <div className="bg-indigo-50/80 dark:bg-indigo-950/30 p-3 rounded-lg relative border border-indigo-100 dark:border-indigo-900/50">
+                              <div className="absolute -top-2 left-3 bg-indigo-500 text-white text-[10px] px-1.5 py-0.5 rounded-full font-medium shadow-sm">AI</div>
+                              <p className="whitespace-pre-wrap pt-1 text-indigo-900 dark:text-indigo-100">{m.replyMessage}</p>
+                            </div>
+                          )}
+
+                          {/* Typed Text Check */}
+                          {m.typedText && m.typedText !== m.text && (
+                            <div className="flex items-center gap-1.5 text-xs text-green-600 dark:text-green-400 bg-green-50/50 dark:bg-green-950/20 px-2 py-1 rounded w-fit border border-green-100 dark:border-green-900/30">
+                              <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <polyline points="20 6 9 17 4 12" />
+                              </svg>
+                              <span className="font-medium">已输入到 PC</span>
+                            </div>
+                          )}
+
+                          {/* Steps */}
+                          {m.agentSteps && m.agentSteps.length > 0 && (
+                            <details className="text-xs group mt-2">
+                              <summary className="cursor-pointer text-muted-foreground hover:text-foreground list-none flex items-center gap-1 font-medium select-none transition-colors">
+                                <span className="group-open:rotate-90 transition-transform duration-200">▶</span>
+                                Agent 步骤 ({m.agentSteps.length})
+                              </summary>
+                              <div className="pl-3 border-l-2 border-muted mt-2 space-y-2 py-1 animate-in slide-in-from-top-1 fade-in duration-200">
+                                {m.agentSteps.map((step, idx) => (
+                                  <div key={idx} className="font-mono break-all text-[11px] leading-relaxed">
+                                    {step.type === 'tool-call' && (
+                                      <div className="text-amber-600 dark:text-amber-400 font-medium flex items-start gap-1">
+                                        <span className="flex-shrink-0">🔧</span> 
+                                        <span>
+                                          Call {step.toolName} 
+                                          <span className="text-muted-foreground opacity-70 ml-1 font-normal block pl-4 border-l border-muted/50 mt-1">
+                                            {JSON.stringify(step.args, null, 2)}
+                                          </span>
+                                        </span>
+                                      </div>
+                                    )}
+                                    {step.type === 'tool-result' && (
+                                      <div className="text-green-600 dark:text-green-400 flex items-center gap-1">
+                                        <span className="flex-shrink-0">✅</span>
+                                        <span className="opacity-80">完成</span>
+                                      </div>
+                                    )}
+                                    {step.type === 'text' && step.text && (
+                                      <div className="text-muted-foreground pl-4 border-l border-muted/50 italic">
+                                        "{step.text.slice(0, 100)}{step.text.length > 100 ? '...' : ''}"
+                                      </div>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            </details>
+                          )}
+                        </div>
+                      )}
+
                       <div className="flex items-center gap-2">
                         <StatusIcon status={m.status} />
                         <span className="text-xs text-muted-foreground font-medium">
@@ -654,7 +758,7 @@ export default function App() {
                                   : '发送中'}
                         </span>
                       </div>
-                    </div>
+                    </Card>
                   )}
                 </div>
               );
@@ -678,8 +782,10 @@ export default function App() {
       {/* Input Area */}
       <footer ref={footerRef} className="fixed bottom-0 left-0 right-0 bg-card/80 backdrop-blur-xl border-t safe-bottom z-50">
         <div className="flex items-center gap-1.5 p-4">
-          <button
-            className="h-11 w-11 flex-shrink-0 bg-muted text-muted-foreground rounded-2xl flex items-center justify-center active:bg-accent transition-colors disabled:opacity-50"
+          <Button
+            variant="secondary"
+            size="icon"
+            className="h-11 w-11 flex-shrink-0 rounded-2xl text-muted-foreground"
             onClick={handleImageButtonClick}
             disabled={!connected}
             aria-label="拍照或选择图片"
@@ -688,7 +794,7 @@ export default function App() {
               <path d="M21 19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h3l2-2h4l2 2h3a2 2 0 0 1 2 2z" />
               <circle cx="12" cy="13" r="3" />
             </svg>
-          </button>
+          </Button>
           <input
             ref={cameraInputRef}
             type="file"
@@ -705,9 +811,9 @@ export default function App() {
             onChange={handleImageChange}
           />
           <div className="flex-1 min-w-0">
-            <textarea
+            <Textarea
               ref={textareaRef}
-              className="block w-full h-11 min-h-11 bg-muted rounded-2xl px-4 py-2.5 text-base leading-6 font-sans placeholder:text-[15px] placeholder:text-muted-foreground resize-none overflow-y-auto outline-none focus:ring-2 focus:ring-ring/30 transition-shadow"
+              className="block h-11 min-h-11 w-full resize-none overflow-y-auto rounded-2xl border-0 bg-muted px-4 py-2.5 text-base leading-6 placeholder:text-[15px] focus-visible:ring-ring/30"
               placeholder="请输入文字…"
               value={input}
               onChange={handleTextareaChange}
@@ -719,21 +825,23 @@ export default function App() {
             />
           </div>
           <div className="flex h-11 flex-shrink-0">
-            <button
-              className="h-full px-2.5 text-sm bg-primary text-primary-foreground font-semibold rounded-l-full disabled:opacity-50 active:opacity-80 transition-opacity min-w-[3.25rem]"
+            <Button
+              className="h-full min-w-[3.25rem] rounded-l-full rounded-r-none px-2.5 text-sm"
               disabled={!input.trim() || !connected}
               onClick={handleSend}
             >
               {sendMode === 'send' ? '发送' : '回车'}
-            </button>
-            <button
-              className="h-full w-9 bg-muted text-muted-foreground rounded-r-full border-l flex items-center justify-center active:bg-accent transition-colors"
+            </Button>
+            <Button
+              variant="secondary"
+              className="h-full w-9 rounded-l-none rounded-r-full border-l border-border px-0 text-muted-foreground"
               onClick={() => setShowModeMenu(true)}
+              aria-label="发送模式"
             >
               <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="M6 9l6 6 6-6"/>
               </svg>
-            </button>
+            </Button>
           </div>
         </div>
       </footer>
@@ -833,72 +941,71 @@ export default function App() {
       )}
 
       {/* Image Source Menu */}
-      {showImageSourceMenu && (
-        <div className="fixed inset-0 z-[100]" onClick={() => setShowImageSourceMenu(false)}>
-          <div className="absolute inset-0 bg-black/40" />
-          <div className="absolute bottom-0 left-0 right-0 bg-card rounded-t-3xl safe-bottom animate-slide-up">
-            <div className="w-10 h-1 bg-border rounded-full mx-auto mt-3 mb-2" />
-            <div className="p-2">
-              <button className="w-full p-4 text-left rounded-xl active:bg-muted" onClick={handleTakePhoto}>
-                <span className="font-medium">拍照</span>
-              </button>
-              <button className="w-full p-4 text-left rounded-xl active:bg-muted" onClick={handlePickFromGallery}>
-                <span className="font-medium">从相册选择</span>
-              </button>
-            </div>
-            <button className="w-full p-4 text-center text-muted-foreground font-medium border-t" onClick={() => setShowImageSourceMenu(false)}>
-              取消
-            </button>
+      <Sheet open={showImageSourceMenu} onOpenChange={setShowImageSourceMenu}>
+        <SheetContent className="safe-bottom">
+          <SheetHeader>
+            <SheetTitle>选择图片来源</SheetTitle>
+            <SheetDescription>可直接拍照或从相册选择</SheetDescription>
+          </SheetHeader>
+          <div className="space-y-2 pb-1">
+            <Button variant="secondary" className="h-11 w-full justify-start" onClick={handleTakePhoto}>拍照</Button>
+            <Button variant="secondary" className="h-11 w-full justify-start" onClick={handlePickFromGallery}>从相册选择</Button>
+            <Button variant="ghost" className="h-11 w-full" onClick={() => setShowImageSourceMenu(false)}>取消</Button>
           </div>
-        </div>
-      )}
+        </SheetContent>
+      </Sheet>
 
       {/* Mode Menu */}
-      {showModeMenu && (
-        <div className="fixed inset-0 z-[100]" onClick={() => setShowModeMenu(false)}>
-          <div className="absolute inset-0 bg-black/40" />
-          <div className="absolute bottom-0 left-0 right-0 bg-card rounded-t-3xl safe-bottom animate-slide-up">
-            <div className="w-10 h-1 bg-border rounded-full mx-auto mt-3 mb-2" />
-            <div className="p-2">
-              <button className={`w-full p-4 text-left rounded-xl ${sendMode === 'send' ? 'bg-muted' : ''}`}
-                onClick={() => { setSendMode('send'); setShowModeMenu(false); }}>
-                <span className="font-medium">发送</span>
-              </button>
-              <button className={`w-full p-4 text-left rounded-xl ${sendMode === 'execute' ? 'bg-muted' : ''}`}
-                onClick={() => { setSendMode('execute'); setShowModeMenu(false); }}>
-                <span className="font-medium">发送并回车</span>
-              </button>
-            </div>
-            <button className="w-full p-4 text-center text-muted-foreground font-medium border-t" onClick={() => setShowModeMenu(false)}>
-              取消
-            </button>
+      <Sheet open={showModeMenu} onOpenChange={setShowModeMenu}>
+        <SheetContent className="safe-bottom">
+          <SheetHeader>
+            <SheetTitle>发送模式</SheetTitle>
+            <SheetDescription>选择默认发送动作</SheetDescription>
+          </SheetHeader>
+          <div className="space-y-2 pb-1">
+            <Button
+              variant={sendMode === 'send' ? 'default' : 'secondary'}
+              className="h-11 w-full justify-start"
+              onClick={() => {
+                setSendMode('send');
+                setShowModeMenu(false);
+              }}
+            >
+              发送
+            </Button>
+            <Button
+              variant={sendMode === 'execute' ? 'default' : 'secondary'}
+              className="h-11 w-full justify-start"
+              onClick={() => {
+                setSendMode('execute');
+                setShowModeMenu(false);
+              }}
+            >
+              发送并回车
+            </Button>
+            <Button variant="ghost" className="h-11 w-full" onClick={() => setShowModeMenu(false)}>取消</Button>
           </div>
-        </div>
-      )}
+        </SheetContent>
+      </Sheet>
 
       {/* Action Menu */}
-      {showActionMenu && selectedMsg && (
-        <div className="fixed inset-0 z-[100]" onClick={() => setShowActionMenu(false)}>
-          <div className="absolute inset-0 bg-black/40" />
-          <div className="absolute bottom-0 left-0 right-0 bg-card rounded-t-3xl safe-bottom animate-slide-up">
-            <div className="w-10 h-1 bg-border rounded-full mx-auto mt-3 mb-2" />
-            <div className="p-2">
-              <button className="w-full p-4 text-left rounded-xl active:bg-muted" onClick={() => handleCopy(selectedMsg.text)}>
-                <span className="font-medium">复制</span>
-              </button>
-              <button className="w-full p-4 text-left rounded-xl active:bg-muted" onClick={() => handleResend(selectedMsg)}>
-                <span className="font-medium">重新发送</span>
-              </button>
-              <button className="w-full p-4 text-left rounded-xl active:bg-muted" onClick={() => handleDelete(selectedMsg.id)}>
-                <span className="font-medium text-destructive">删除</span>
-              </button>
+      <Sheet open={showActionMenu} onOpenChange={setShowActionMenu}>
+        <SheetContent className="safe-bottom">
+          <SheetHeader>
+            <SheetTitle>消息操作</SheetTitle>
+            <SheetDescription>可复制、重发或删除当前消息</SheetDescription>
+          </SheetHeader>
+          {selectedMsg && (
+            <div className="space-y-2 pb-1">
+              <Button variant="secondary" className="h-11 w-full justify-start" onClick={() => handleCopy(selectedMsg.text)}>复制</Button>
+              <Button variant="secondary" className="h-11 w-full justify-start" onClick={() => handleResend(selectedMsg)}>重新发送</Button>
+              <Button variant="destructive" className="h-11 w-full justify-start" onClick={() => handleDelete(selectedMsg.id)}>删除</Button>
+              <Button variant="ghost" className="h-11 w-full" onClick={() => setShowActionMenu(false)}>取消</Button>
             </div>
-            <button className="w-full p-4 text-center text-muted-foreground font-medium border-t" onClick={() => setShowActionMenu(false)}>
-              取消
-            </button>
-          </div>
-        </div>
-      )}
+          )}
+        </SheetContent>
+      </Sheet>
+      <Toaster position="top-center" richColors />
     </div>
   );
 }

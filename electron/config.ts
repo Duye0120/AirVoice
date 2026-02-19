@@ -3,7 +3,7 @@ import path from 'path';
 import { app } from 'electron';
 
 export type AIProvider = 'openai' | 'anthropic' | 'google';
-export type OptimizeMode = 'off' | 'auto' | 'manual';
+export type OptimizeMode = 'off' | 'auto' | 'manual' | 'agent';
 
 export interface ProviderConfig {
   apiKey: string;

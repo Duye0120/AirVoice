@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { QrCode, Sparkles, Minus, X, Clock, Bot } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { Sparkles, Minus, X, Bot, MessageSquare, Settings as SettingsIcon, Smartphone, Send, Loader2, ChevronRight, Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -13,8 +13,9 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 
+// Type definitions (redefined for safety)
 type AIProvider = 'openai' | 'anthropic' | 'google';
-type OptimizeMode = 'off' | 'auto' | 'manual';
+type OptimizeMode = 'off' | 'auto' | 'manual' | 'agent';
 
 interface ProviderConfig {
   apiKey: string;
@@ -50,6 +51,31 @@ interface ImageSettings {
   fallbackToPathWhenPasteFails: boolean;
 }
 
+interface AgentStepInfo {
+  type: 'tool-call' | 'tool-result' | 'text';
+  toolName?: string;
+  args?: Record<string, unknown>;
+  result?: unknown;
+  text?: string;
+}
+
+interface ChatMessage {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  timestamp: number;
+  steps?: AgentStepInfo[];
+  streaming?: boolean;
+}
+
+interface ChatSession {
+  id: string;
+  title: string;
+  messages: ChatMessage[];
+  createdAt: number;
+  updatedAt: number;
+}
+
 const PROVIDER_OPTIONS = [
   {
     id: 'openai' as AIProvider,
@@ -83,47 +109,63 @@ const IMAGE_CLEANUP_OPTIONS = [
   { value: 1440, label: '24 小时' },
 ];
 
-type Page = 'connection' | 'history' | 'ai' | 'role';
+type Page = 'chat' | 'settings' | 'mobile';
 
-interface HistoryItem {
-  text?: string;
-  kind?: 'text' | 'image';
-  imageName?: string;
-  time: number;
-}
-
-const formatTime = (timestamp: number) => {
-  return new Date(timestamp).toLocaleTimeString('en-US', { 
-    hour: 'numeric', 
-    minute: '2-digit', 
-    hour12: true 
-  });
-};
-
-const getDateLabel = (timestamp: number) => {
-  const date = new Date(timestamp);
-  const now = new Date();
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const yesterday = new Date(today);
-  yesterday.setDate(yesterday.getDate() - 1);
-  
-  const msgDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-  
-  if (msgDate.getTime() === today.getTime()) {
-    return "Today";
-  } else if (msgDate.getTime() === yesterday.getTime()) {
-    return "Yesterday";
-  } else {
-    return date.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
-  }
+const ChatBubble = ({ message }: { message: ChatMessage }) => {
+  const isUser = message.role === 'user';
+  return (
+    <div className={`chat-bubble ${isUser ? 'chat-bubble-user' : 'chat-bubble-assistant'}`}>
+      <div className={message.streaming ? 'chat-streaming-cursor' : ''}>
+        {message.content}
+      </div>
+      
+      {message.role === 'assistant' && message.steps && message.steps.length > 0 && (
+        <details className="chat-tool-steps text-muted-foreground cursor-pointer">
+          <summary className="hover:text-foreground transition-colors flex items-center gap-1 select-none">
+            <ChevronRight className="w-3 h-3 transition-transform" />
+            Agent 步骤 ({message.steps.length})
+          </summary>
+          <div className="pl-4 mt-2 space-y-2 border-l-2 border-muted">
+            {message.steps.map((step, idx) => (
+              <div key={idx} className="text-xs font-mono">
+                {step.type === 'tool-call' && (
+                  <div>
+                    <span className="text-blue-500">🔧 {step.toolName}</span>
+                    <pre className="mt-1 bg-background/50 p-1 rounded overflow-x-auto">
+                      {JSON.stringify(step.args, null, 2)}
+                    </pre>
+                  </div>
+                )}
+                {step.type === 'tool-result' && (
+                  <div className="text-green-600 flex items-center gap-1">
+                    <Check className="w-3 h-3" />
+                    <span>完成</span>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </details>
+      )}
+    </div>
+  );
 };
 
 export default function App() {
-  const [activePage, setActivePage] = useState<Page>('connection');
+  const [activePage, setActivePage] = useState<Page>('chat');
   const [connected, setConnected] = useState(false);
   const [qrCode, setQrCode] = useState<string | null>(null);
   const [serverInfo, setServerInfo] = useState({ ip: '--', port: 0 });
   
+  // Chat State
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [chatInput, setChatInput] = useState('');
+  const [chatSending, setChatSending] = useState(false);
+  const [chatSessions, setChatSessions] = useState<ChatSession[]>([]);
+  const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
+  const chatListRef = useRef<HTMLDivElement>(null);
+
+  // AI & Config State
   const [config, setConfig] = useState<AIConfig>({ 
     provider: 'openai', 
     optimizeMode: 'off',
@@ -147,8 +189,8 @@ export default function App() {
   });
   const [savingImageSettings, setSavingImageSettings] = useState(false);
   const [imageSettingsSaveStatus, setImageSettingsSaveStatus] = useState<'idle' | 'success'>('idle');
-  const [history, setHistory] = useState<HistoryItem[]>([]);
 
+  // Initialization
   useEffect(() => {
     const init = async () => {
       try {
@@ -174,15 +216,22 @@ export default function App() {
         const active = roleConfig.roles?.find(role => role.id === roleConfig.activeRoleId);
         setRoleDraft(active?.prompt || '');
         
-        const historyData = await window.electronAPI.getHistory() as HistoryItem[];
-        setHistory(historyData || []);
-
         const imageConfig = await window.electronAPI.getImageSettings() as ImageSettings;
         setImageSettings({
           cacheDir: imageConfig?.cacheDir || '',
           cleanupIntervalMinutes: imageConfig?.cleanupIntervalMinutes ?? 60,
           fallbackToPathWhenPasteFails: imageConfig?.fallbackToPathWhenPasteFails ?? true,
         });
+
+        // Load Chat Sessions
+        const sessions = await window.electronAPI.getChatSessions();
+        setChatSessions(sessions);
+        if (sessions.length > 0) {
+          const latest = sessions[0];
+          setCurrentSessionId(latest.id);
+          const session = await window.electronAPI.getChatSession(latest.id);
+          if (session) setChatMessages(session.messages);
+        }
       } catch (e) {
         console.error('Failed to init:', e);
       }
@@ -203,6 +252,51 @@ export default function App() {
       cleanupIP();
     };
   }, []);
+
+  // Chat Event Listeners
+  useEffect(() => {
+    const cleanups = [
+      window.electronAPI.onChatDelta(({ chatId, delta }) => {
+        setChatMessages(prev => prev.map(m => 
+          m.id === chatId ? { ...m, content: m.content + delta } : m
+        ));
+      }),
+      window.electronAPI.onChatToolCall(({ chatId, toolName, args }) => {
+        setChatMessages(prev => prev.map(m => {
+          if (m.id !== chatId) return m;
+          const steps = [...(m.steps || []), { type: 'tool-call' as const, toolName, args }];
+          return { ...m, steps };
+        }));
+      }),
+      window.electronAPI.onChatToolResult(({ chatId, toolName, result }) => {
+        setChatMessages(prev => prev.map(m => {
+          if (m.id !== chatId) return m;
+          const steps = [...(m.steps || []), { type: 'tool-result' as const, toolName, result }];
+          return { ...m, steps };
+        }));
+      }),
+      window.electronAPI.onChatDone(({ chatId, content, steps }) => {
+        setChatMessages(prev => prev.map(m => 
+          m.id === chatId ? { ...m, content, steps, streaming: false } : m
+        ));
+        setChatSending(false); // Ensure sending state is cleared
+      }),
+      window.electronAPI.onChatError(({ chatId, error }) => {
+        setChatMessages(prev => prev.map(m => 
+          m.id === chatId ? { ...m, content: `错误: ${error}`, streaming: false } : m
+        ));
+        setChatSending(false);
+      }),
+    ];
+    return () => cleanups.forEach(fn => fn());
+  }, []);
+
+  // Scroll Chat to Bottom
+  useEffect(() => {
+    if (chatListRef.current) {
+      chatListRef.current.scrollTop = chatListRef.current.scrollHeight;
+    }
+  }, [chatMessages]);
 
   const handleSave = async () => {
     setSaving(true);
@@ -256,6 +350,43 @@ export default function App() {
     }));
   };
 
+  const handleChatSend = async () => {
+    if (!chatInput.trim() || chatSending) return;
+    const content = chatInput.trim();
+    setChatInput('');
+    setChatSending(true);
+    
+    try {
+      const { chatId, sessionId } = await window.electronAPI.sendChatMessage(content, currentSessionId || undefined);
+      setCurrentSessionId(sessionId);
+      
+      setChatMessages(prev => [...prev, {
+        id: crypto.randomUUID(),
+        role: 'user',
+        content,
+        timestamp: Date.now(),
+      }]);
+      
+      setChatMessages(prev => [...prev, {
+        id: chatId,
+        role: 'assistant',
+        content: '',
+        timestamp: Date.now(),
+        streaming: true,
+      }]);
+    } catch (err) {
+      console.error('Chat send failed:', err);
+      setChatSending(false);
+    }
+  };
+
+  const handleChatKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleChatSend();
+    }
+  };
+
   const currentProvider = PROVIDER_OPTIONS.find(p => p.id === config.provider)!;
   const currentProviderConfig = config.providers[config.provider];
   const aiEnabled = config.optimizeMode !== 'off';
@@ -264,7 +395,7 @@ export default function App() {
     <div className="desktop-root h-screen flex flex-col">
       {/* Titlebar */}
       <div className="titlebar">
-        <span className="titlebar-title">AirVoice</span>
+        <span className="titlebar-title">AirVoice Agent</span>
         <div className="window-controls">
           <button
             className="control-btn"
@@ -296,195 +427,67 @@ export default function App() {
           </div>
           <nav className="sidebar-nav">
             <button
-              className={`nav-item ${activePage === 'connection' ? 'active' : ''}`}
-              onClick={() => setActivePage('connection')}
+              className={`nav-item ${activePage === 'chat' ? 'active' : ''}`}
+              onClick={() => setActivePage('chat')}
             >
-              <QrCode className="nav-icon" />
-              <span>连接</span>
+              <MessageSquare className="nav-icon" />
+              <span>Chat</span>
             </button>
             <button
-              className={`nav-item ${activePage === 'history' ? 'active' : ''}`}
-              onClick={async () => {
-                setActivePage('history');
-                const historyData = await window.electronAPI.getHistory();
-                setHistory(historyData || []);
-              }}
+              className={`nav-item ${activePage === 'settings' ? 'active' : ''}`}
+              onClick={() => setActivePage('settings')}
             >
-              <Clock className="nav-icon" />
-              <span>历史记录</span>
+              <SettingsIcon className="nav-icon" />
+              <span>设置</span>
             </button>
             <button
-              className={`nav-item ${activePage === 'ai' ? 'active' : ''}`}
-              onClick={() => setActivePage('ai')}
+              className={`nav-item ${activePage === 'mobile' ? 'active' : ''}`}
+              onClick={() => setActivePage('mobile')}
             >
-              <Sparkles className="nav-icon" />
-              <span>AI 设置</span>
-            </button>
-            <button
-              className={`nav-item ${activePage === 'role' ? 'active' : ''}`}
-              onClick={() => setActivePage('role')}
-            >
-              <Bot className="nav-icon" />
-              <span>角色设定</span>
+              <Smartphone className="nav-icon" />
+              <span>手机连接</span>
             </button>
           </nav>
         </div>
 
         {/* Content */}
-        <main className="main-content">
-          {activePage === 'connection' ? (
-            <div className="page-shell connection-page font-sans">
-              <div className="page-title-row">
-                <h1 className="page-title">连接</h1>
-                <span className={`status-chip ${aiEnabled ? 'is-on' : 'is-off'}`}>
-                  {aiEnabled ? 'AI 已启用' : 'AI 未启用'}
-                </span>
+        <main className="main-content flex flex-col h-full">
+          {activePage === 'chat' && (
+            <div className="chat-page h-full">
+              <div className="chat-messages" ref={chatListRef}>
+                {chatMessages.length === 0 ? (
+                  <div className="chat-empty">
+                    <MessageSquare className="w-12 h-12 mb-4 opacity-50" />
+                    <p>开始对话</p>
+                  </div>
+                ) : (
+                  chatMessages.map(msg => <ChatBubble key={msg.id} message={msg} />)
+                )}
               </div>
               
-              <div className="qr-container">
-                <div className="qr-frame">
-                  {qrCode ? (
-                    <img src={qrCode} alt="扫码连接" />
-                  ) : (
-                    <div className="w-[180px] h-[180px] flex items-center justify-center text-muted-foreground">
-                      加载中...
-                    </div>
-                  )}
-                </div>
-                
-                <div className="server-info">
-                  {serverInfo.ip}:{serverInfo.port}
-                </div>
-
-                <div className={`connection-status ${connected ? 'connected' : 'disconnected'}`}>
-                  <span className="status-dot" />
-                  <span>{connected ? '设备已连接' : '等待连接...'}</span>
-                </div>
-              </div>
-
-              <div className="settings-section mt-6">
-                <div className="section-header">
-                  <span>图片缓存设置</span>
-                </div>
-
-                <div className="space-y-4 px-4 pb-4 pt-2">
-                  <div className="form-group">
-                    <Label className="form-label">缓存目录</Label>
-                    <div className="flex gap-2">
-                      <Input
-                        value={imageSettings.cacheDir}
-                        onChange={(e) => setImageSettings((prev) => ({ ...prev, cacheDir: e.target.value }))}
-                        placeholder="选择图片缓存目录"
-                      />
-                      <Button variant="outline" onClick={handlePickImageCacheDir}>选择</Button>
-                    </div>
-                    <p className="form-hint">图片会先保存到此目录，再执行粘贴逻辑。</p>
-                  </div>
-
-                  <div className="form-group">
-                    <Label className="form-label">自动清理间隔</Label>
-                    <Select
-                      value={String(imageSettings.cleanupIntervalMinutes)}
-                      onValueChange={(value) => {
-                        const minutes = Number(value);
-                        setImageSettings((prev) => ({
-                          ...prev,
-                          cleanupIntervalMinutes: Number.isFinite(minutes) ? minutes : prev.cleanupIntervalMinutes,
-                        }));
-                      }}
-                    >
-                      <SelectTrigger className="w-[220px]">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {IMAGE_CLEANUP_OPTIONS.map((option) => (
-                          <SelectItem key={option.value} value={String(option.value)}>{option.label}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="settings-row">
-                    <div className="settings-label">
-                      <span className="settings-label-title">粘贴失败自动降级路径</span>
-                      <span className="settings-label-desc">目标应用不支持图片时，自动发送图片文件路径</span>
-                    </div>
-                    <Switch
-                      checked={imageSettings.fallbackToPathWhenPasteFails}
-                      onCheckedChange={(checked) => setImageSettings((prev) => ({ ...prev, fallbackToPathWhenPasteFails: checked }))}
-                    />
-                  </div>
-
-                  <Button className="w-full" onClick={handleSaveImageSettings} disabled={savingImageSettings}>
-                    {imageSettingsSaveStatus === 'success'
-                      ? '已保存'
-                      : savingImageSettings
-                        ? '保存中...'
-                        : '保存图片设置'}
-                  </Button>
-                </div>
+              <div className="chat-input-area">
+                <Textarea 
+                  value={chatInput} 
+                  onChange={(e) => setChatInput(e.target.value)} 
+                  onKeyDown={handleChatKeyDown} 
+                  placeholder="输入消息..." 
+                />
+                <Button onClick={handleChatSend} disabled={chatSending || !chatInput.trim()}>
+                  {chatSending ? <Loader2 className="animate-spin" /> : <Send />}
+                </Button>
               </div>
             </div>
-          ) : activePage === 'history' ? (
-            <div className="page-shell">
-              <h1 className="page-title">历史记录</h1>
-              
-              {history.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
-                  <Clock className="w-12 h-12 mb-4 opacity-50" />
-                  <p>暂无历史记录</p>
-                </div>
-              ) : (
-                <div className="space-y-6">
-                  {history.reduce((acc, item, index) => {
-                    const dateLabel = getDateLabel(item.time);
-                    const prevItem = history[index - 1];
-                    const prevDateLabel = prevItem ? getDateLabel(prevItem.time) : null;
-                    
-                    if (dateLabel !== prevDateLabel) {
-                      acc.push(
-                        <div key={`date-${item.time}`} className="text-sm font-medium text-muted-foreground pt-2">
-                          {dateLabel}
-                        </div>
-                      );
-                    }
-                    
-                    acc.push(
-                      <div key={item.time} className="history-item">
-                        <span className="history-time text-sm text-muted-foreground w-20 flex-shrink-0 tabular-nums">
-                          {formatTime(item.time)}
-                        </span>
-                        <p className="text-sm flex-1 break-words leading-6">{item?.text ?? `[图片] ${item?.imageName ?? '图片'}`}</p>
-                      </div>
-                    );
-                    
-                    return acc;
-                  }, [] as React.ReactElement[])}
-                  
-                  <Button
-                    variant="outline"
-                    className="w-full"
-                    onClick={async () => {
-                      if (confirm('确定清空所有历史记录？')) {
-                        await window.electronAPI.clearHistory();
-                        setHistory([]);
-                      }
-                    }}
-                  >
-                    清空历史记录
-                  </Button>
-                </div>
-              )}
-            </div>
-          ) : activePage === 'ai' ? (
-            <div className="page-shell">
-              <h1 className="page-title">AI 设置</h1>
+          )}
 
-              {/* Text Optimization Section */}
+          {activePage === 'settings' && (
+            <div className="page-shell space-y-6">
+              <h1 className="page-title">设置</h1>
+
+              {/* AI Config Section */}
               <div className="settings-section">
                 <div className="section-header">
                   <Sparkles className="section-icon" />
-                  <span>文字优化</span>
+                  <span>AI 配置</span>
                 </div>
 
                 <div className="settings-row">
@@ -503,18 +506,12 @@ export default function App() {
                       <SelectItem value="off">关闭</SelectItem>
                       <SelectItem value="auto">自动</SelectItem>
                       <SelectItem value="manual">手动</SelectItem>
+                      <SelectItem value="agent">Agent</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
-              </div>
 
-              {/* Provider Section */}
-              <div className="settings-section">
-                <div className="section-header">
-                  <span>AI 服务商</span>
-                </div>
-
-                <div className="providers-grid">
+                <div className="providers-grid mt-4">
                   {PROVIDER_OPTIONS.map(p => (
                     <div
                       key={p.id}
@@ -530,8 +527,7 @@ export default function App() {
                   ))}
                 </div>
 
-                {/* Provider Config */}
-                <div className="space-y-4">
+                <div className="space-y-4 mt-4">
                   <div className="form-group">
                     <Label className="form-label">API Key</Label>
                     <Input
@@ -549,7 +545,6 @@ export default function App() {
                       onChange={(e) => updateProviderConfig(config.provider, 'baseURL', e.target.value)}
                       placeholder={currentProvider.defaultURL}
                     />
-                    <p className="form-hint">留空使用默认地址</p>
                   </div>
 
                   <div className="form-group">
@@ -566,22 +561,14 @@ export default function App() {
                       ))}
                     </datalist>
                   </div>
+                  
+                  <Button onClick={handleSave} disabled={saving} className="w-full">
+                    {saveStatus === 'success' ? '已保存' : saving ? '保存中...' : '保存 AI 设置'}
+                  </Button>
                 </div>
               </div>
 
-              {/* Save Button */}
-              <Button
-                onClick={handleSave}
-                disabled={saving}
-                className="w-full"
-              >
-                {saveStatus === 'success' ? '已保存' : saving ? '保存中...' : '保存设置'}
-              </Button>
-            </div>
-          ) : (
-            <div className="page-shell">
-              <h1 className="page-title">角色设定</h1>
-
+              {/* Role Config Section */}
               <div className="settings-section">
                 <div className="section-header">
                   <Bot className="section-icon" />
@@ -589,7 +576,6 @@ export default function App() {
                 </div>
 
                 <div className="px-4 pb-4 pt-2 space-y-4">
-                  {/* Role Selector */}
                   <div className="space-y-2">
                     <Label className="text-xs font-medium text-muted-foreground">当前角色</Label>
                     <Select
@@ -612,7 +598,6 @@ export default function App() {
                     </Select>
                   </div>
 
-                  {/* Compact Add Role Row */}
                   {addingRole ? (
                     <div className="flex items-center gap-2 p-1 animate-in fade-in slide-in-from-top-1 duration-200">
                       <Input
@@ -662,7 +647,6 @@ export default function App() {
                     </Button>
                   )}
 
-                  {/* Prompt Textarea */}
                   <div className="space-y-3 pt-2 border-t border-border/40">
                     <Label className="text-xs font-medium text-muted-foreground">
                       提示词 (System Prompt)
@@ -692,6 +676,101 @@ export default function App() {
                       </Button>
                     </div>
                   </div>
+                </div>
+              </div>
+
+              {/* Image Settings Section */}
+              <div className="settings-section">
+                <div className="section-header">
+                  <span>图片设置</span>
+                </div>
+
+                <div className="space-y-4 px-4 pb-4 pt-2">
+                  <div className="form-group">
+                    <Label className="form-label">缓存目录</Label>
+                    <div className="flex gap-2">
+                      <Input
+                        value={imageSettings.cacheDir}
+                        onChange={(e) => setImageSettings((prev) => ({ ...prev, cacheDir: e.target.value }))}
+                        placeholder="选择图片缓存目录"
+                      />
+                      <Button variant="outline" onClick={handlePickImageCacheDir}>选择</Button>
+                    </div>
+                  </div>
+
+                  <div className="form-group">
+                    <Label className="form-label">自动清理间隔</Label>
+                    <Select
+                      value={String(imageSettings.cleanupIntervalMinutes)}
+                      onValueChange={(value) => {
+                        const minutes = Number(value);
+                        setImageSettings((prev) => ({
+                          ...prev,
+                          cleanupIntervalMinutes: Number.isFinite(minutes) ? minutes : prev.cleanupIntervalMinutes,
+                        }));
+                      }}
+                    >
+                      <SelectTrigger className="w-[220px]">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {IMAGE_CLEANUP_OPTIONS.map((option) => (
+                          <SelectItem key={option.value} value={String(option.value)}>{option.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="settings-row">
+                    <div className="settings-label">
+                      <span className="settings-label-title">粘贴失败自动降级路径</span>
+                      <span className="settings-label-desc">目标应用不支持图片时，自动发送图片文件路径</span>
+                    </div>
+                    <Switch
+                      checked={imageSettings.fallbackToPathWhenPasteFails}
+                      onCheckedChange={(checked) => setImageSettings((prev) => ({ ...prev, fallbackToPathWhenPasteFails: checked }))}
+                    />
+                  </div>
+
+                  <Button className="w-full" onClick={handleSaveImageSettings} disabled={savingImageSettings}>
+                    {imageSettingsSaveStatus === 'success'
+                      ? '已保存'
+                      : savingImageSettings
+                        ? '保存中...'
+                        : '保存图片设置'}
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {activePage === 'mobile' && (
+            <div className="page-shell connection-page font-sans">
+              <div className="page-title-row">
+                <h1 className="page-title">手机连接</h1>
+                <span className={`status-chip ${aiEnabled ? 'is-on' : 'is-off'}`}>
+                  {aiEnabled ? 'AI 已启用' : 'AI 未启用'}
+                </span>
+              </div>
+              
+              <div className="qr-container">
+                <div className="qr-frame">
+                  {qrCode ? (
+                    <img src={qrCode} alt="扫码连接" />
+                  ) : (
+                    <div className="w-[180px] h-[180px] flex items-center justify-center text-muted-foreground">
+                      加载中...
+                    </div>
+                  )}
+                </div>
+                
+                <div className="server-info">
+                  {serverInfo.ip}:{serverInfo.port}
+                </div>
+
+                <div className={`connection-status ${connected ? 'connected' : 'disconnected'}`}>
+                  <span className="status-dot" />
+                  <span>{connected ? '设备已连接' : '等待连接...'}</span>
                 </div>
               </div>
             </div>

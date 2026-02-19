@@ -1,8 +1,9 @@
 import { app, BrowserWindow, dialog, globalShortcut, ipcMain, Menu } from 'electron';
 import path from 'path';
+import crypto from 'crypto';
 import QRCode from 'qrcode';
 import { createTray } from './tray';
-import { startServer, getState, serverEvents, stopServer, loadHistory, saveHistory } from './server';
+import { startServer, getState, serverEvents, stopServer, loadHistory, saveHistory, notifyAIConfigChanged } from './server';
 import { typeText, pasteImage } from './keyboard';
 import {
   getConfig,
@@ -16,6 +17,20 @@ import {
   type RoleConfig,
 } from './config';
 import { optimizeText } from './ai';
+import { runAgent } from './agent';
+import {
+  loadSessions,
+  createSession,
+  getCurrentSession,
+  getSession,
+  setCurrentSession,
+  getSessions,
+  deleteSession,
+  clearAllSessions,
+  addMessage,
+  updateMessage,
+} from './chat';
+import type { ChatMessage, AgentStepInfo } from './types';
 
 let mainWindow: BrowserWindow | null = null;
 let lastText = '';
@@ -28,7 +43,11 @@ ipcMain.handle('generate-qrcode', async (_, url: string) => {
 
 ipcMain.handle('get-ai-config', () => getConfig());
 
-ipcMain.handle('save-ai-config', (_, config: Partial<AIConfig>) => saveConfig(config));
+ipcMain.handle('save-ai-config', (_, config: Partial<AIConfig>) => {
+  const updated = saveConfig(config);
+  notifyAIConfigChanged();
+  return updated;
+});
 
 ipcMain.handle('get-role-config', () => getRoleConfig());
 
@@ -60,6 +79,78 @@ ipcMain.handle('get-history', () => loadHistory());
 ipcMain.handle('clear-history', () => {
   saveHistory([]);
   return true;
+});
+
+// ============================================================
+// Chat IPC Handlers
+// ============================================================
+
+ipcMain.handle('get-chat-sessions', () => getSessions());
+
+ipcMain.handle('get-chat-session', (_, sessionId: string) => getSession(sessionId) ?? null);
+
+ipcMain.handle('create-chat-session', (_, title?: string) => createSession(title));
+
+ipcMain.handle('delete-chat-session', (_, sessionId: string) => deleteSession(sessionId));
+
+ipcMain.handle('clear-all-chat-sessions', () => clearAllSessions());
+
+ipcMain.handle('set-current-chat-session', (_, sessionId: string) => setCurrentSession(sessionId) ?? null);
+
+ipcMain.handle('send-chat-message', async (_, content: string, sessionId?: string) => {
+  const session = sessionId ? getSession(sessionId) ?? getCurrentSession() : getCurrentSession();
+  const chatId = crypto.randomUUID();
+
+  // 获取历史消息（排除 streaming 占位）
+  const history = session.messages.filter((m) => !m.streaming);
+
+  // 添加用户消息
+  const userMsg: ChatMessage = {
+    id: crypto.randomUUID(),
+    role: 'user',
+    content,
+    timestamp: Date.now(),
+  };
+  addMessage(session.id, userMsg);
+
+  // 创建 assistant 消息占位
+  const assistantMsg: ChatMessage = {
+    id: chatId,
+    role: 'assistant',
+    content: '',
+    timestamp: Date.now(),
+    steps: [],
+    streaming: true,
+  };
+  addMessage(session.id, assistantMsg);
+
+  // 异步执行 Agent（不阻塞 IPC 返回）
+  runAgent(content, { history }).then((result) => {
+    const steps: AgentStepInfo[] = result.steps;
+    updateMessage(session.id, chatId, {
+      content: result.replyMessage || result.text || '',
+      steps,
+      streaming: false,
+    });
+    if (mainWindow) {
+      mainWindow.webContents.send('chat-done', {
+        chatId,
+        content: result.replyMessage || result.text || '',
+        steps,
+      });
+    }
+  }).catch((err) => {
+    const errorMsg = err instanceof Error ? err.message : 'Agent 处理失败';
+    updateMessage(session.id, chatId, {
+      content: `错误: ${errorMsg}`,
+      streaming: false,
+    });
+    if (mainWindow) {
+      mainWindow.webContents.send('chat-error', { chatId, error: errorMsg });
+    }
+  });
+
+  return { chatId, sessionId: session.id };
 });
 
 function createQRWindow(): void {
@@ -98,6 +189,7 @@ function showQRWindow(): void {
 
 app.whenReady().then(() => {
   Menu.setApplicationMenu(null);
+  loadSessions();
   
   startServer({
     onText: (text, execute) => {
@@ -110,9 +202,6 @@ app.whenReady().then(() => {
     onConnection: (connected) => {
       if (mainWindow) {
         mainWindow.webContents.send('connection-status', connected);
-        if (connected) {
-          mainWindow.hide();
-        }
       }
     }
   });

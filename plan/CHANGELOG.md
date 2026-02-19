@@ -12,6 +12,60 @@
 
 ## 更新记录
 
+### 2026-02-19 - PC 端 Chat 界面重构
+
+**功能描述：**
+- PC 端主界面重构为 Chat 模式，作为 AI Agent 的核心交互入口
+- 新增侧边栏导航：Chat（默认）、设置、手机连接
+- 移除独立的“历史记录”页面，整合进 Chat 界面
+- 合并“AI 设置”、“角色设定”、“图片设置”到统一的“设置”页面
+- Chat 界面支持流式消息显示、工具调用可视化（Agent 步骤折叠）、多会话管理
+- 保持原有手机连接功能（扫码、状态显示）在独立页面
+- UI 样式适配：新增聊天气泡、工具调用详情、输入区域样式
+
+**修改的文件：**
+- `src/App.tsx` - 全量重构，实现 Chat 逻辑与新布局
+- `src/index.css` - 新增 Chat 相关样式
+
+### 2026-02-19 - Agent 模式（智能输入 v1）
+
+**功能描述：**
+- 新增 Agent 模式：AI 不再只是"润色器"，而是能理解用户意图、自主选择工具的智能助手
+- 在 PC 端 AI 设置中，优化模式新增"Agent"选项，与原有的关闭/自动/手动模式并列
+- Agent 拥有 6 个工具：typeText（输入到 PC）、translate（翻译）、formatCode（格式化代码）、rewrite（润色改写）、summarize（总结）、reply（直接回复）
+- AI 根据用户输入自动判断意图：普通文字直接输入到 PC、包含指令时先处理再输入、提问时直接回复
+- 移动端 Header 显示 Agent 徽章（靛蓝色），区别于普通 AI 模式
+- 消息卡片展示 Agent 执行结果：AI 回复气泡、"已输入到 PC"状态、可折叠的 Agent 步骤详情
+- PC 端保存 AI 配置后实时通知移动端状态变化
+
+**Agent 工作流程：**
+1. 用户在手机端输入文字，发送到 PC
+2. PC 端 Agent 分析用户意图，选择合适的工具
+3. 执行工具调用（可能多步），将结果返回手机端
+4. 手机端展示执行过程和结果
+
+**技术实现：**
+- 使用 Vercel AI SDK v6 的 `generateText` + `tool()` + `stepCountIs()` 实现多步工具调用
+- 工具定义使用 Zod v4 的 `inputSchema` 进行参数校验
+- WebSocket 协议扩展：新增 `agent`、`agent-step`、`agent-done` 消息类型
+
+**修改的文件：**
+- `electron/tools.ts` - 新增，Agent 工具集定义
+- `electron/agent.ts` - 新增，Agent 核心逻辑（system prompt + 工具编排）
+- `electron/config.ts` - OptimizeMode 新增 `agent` 选项
+- `electron/server.ts` - 新增 agent 消息处理分支、agentEnabled 状态推送
+- `electron/main.ts` - 保存配置后通知移动端状态变化
+- `shared/types.ts` - 新增 AgentStepInfo 接口、扩展 WebSocketMessage
+- `electron/types.ts` - 同步类型定义
+- `mobile/src/App.tsx` - Agent 模式 UI（徽章、发送逻辑、结果展示）
+- `src/App.tsx` - PC 端优化模式下拉新增 Agent 选项
+- `src/types/electron.d.ts` - OptimizeMode 类型同步
+
+**注意事项：**
+- Agent 模式需要配置 API Key 才能使用
+- 默认行为：普通文字自动清理口语填充词后输入到 PC
+- 角色系统与 Agent 兼容，角色 Prompt 会追加到 Agent 系统提示中
+
 ### 2026-02-10 - PC 端 UI 现代化（与移动端风格统一）
 
 **功能描述：**

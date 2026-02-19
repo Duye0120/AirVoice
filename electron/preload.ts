@@ -25,4 +25,40 @@ contextBridge.exposeInMainWorld('electronAPI', {
   optimizeText: (text: string) => ipcRenderer.invoke('optimize-text', text),
   getHistory: () => ipcRenderer.invoke('get-history'),
   clearHistory: () => ipcRenderer.invoke('clear-history'),
+
+  // Chat API
+  sendChatMessage: (content: string, sessionId?: string) => ipcRenderer.invoke('send-chat-message', content, sessionId),
+  getChatSessions: () => ipcRenderer.invoke('get-chat-sessions'),
+  getChatSession: (sessionId: string) => ipcRenderer.invoke('get-chat-session', sessionId),
+  createChatSession: (title?: string) => ipcRenderer.invoke('create-chat-session', title),
+  deleteChatSession: (sessionId: string) => ipcRenderer.invoke('delete-chat-session', sessionId),
+  clearAllChatSessions: () => ipcRenderer.invoke('clear-all-chat-sessions'),
+  setCurrentChatSession: (sessionId: string) => ipcRenderer.invoke('set-current-chat-session', sessionId),
+
+  // Chat 流式事件监听
+  onChatDelta: (callback: (data: { chatId: string; delta: string }) => void) => {
+    const handler = (_: Electron.IpcRendererEvent, data: { chatId: string; delta: string }) => callback(data);
+    ipcRenderer.on('chat-delta', handler);
+    return () => ipcRenderer.removeListener('chat-delta', handler);
+  },
+  onChatToolCall: (callback: (data: { chatId: string; toolName: string; args: Record<string, unknown> }) => void) => {
+    const handler = (_: Electron.IpcRendererEvent, data: { chatId: string; toolName: string; args: Record<string, unknown> }) => callback(data);
+    ipcRenderer.on('chat-tool-call', handler);
+    return () => ipcRenderer.removeListener('chat-tool-call', handler);
+  },
+  onChatToolResult: (callback: (data: { chatId: string; toolName: string; result: unknown }) => void) => {
+    const handler = (_: Electron.IpcRendererEvent, data: { chatId: string; toolName: string; result: unknown }) => callback(data);
+    ipcRenderer.on('chat-tool-result', handler);
+    return () => ipcRenderer.removeListener('chat-tool-result', handler);
+  },
+  onChatDone: (callback: (data: { chatId: string; content: string; steps: unknown[] }) => void) => {
+    const handler = (_: Electron.IpcRendererEvent, data: { chatId: string; content: string; steps: unknown[] }) => callback(data);
+    ipcRenderer.on('chat-done', handler);
+    return () => ipcRenderer.removeListener('chat-done', handler);
+  },
+  onChatError: (callback: (data: { chatId: string; error: string }) => void) => {
+    const handler = (_: Electron.IpcRendererEvent, data: { chatId: string; error: string }) => callback(data);
+    ipcRenderer.on('chat-error', handler);
+    return () => ipcRenderer.removeListener('chat-error', handler);
+  },
 });

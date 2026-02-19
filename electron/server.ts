@@ -9,6 +9,7 @@ import { EventEmitter } from 'events';
 import { app } from 'electron';
 import type { ServerState, ServerCallbacks, WebSocketMessage } from './types';
 import { optimizeText } from './ai';
+import { runAgent } from './agent';
 import { getConfig, getImageSettings } from './config';
 
 const PORT = 23456;
@@ -305,6 +306,12 @@ function isAIEnabled(): boolean {
   return config.optimizeMode !== 'off' && !!providerConfig.apiKey;
 }
 
+function isAgentEnabled(): boolean {
+  const config = getConfig();
+  const providerConfig = config.providers[config.provider];
+  return config.optimizeMode === 'agent' && !!providerConfig.apiKey;
+}
+
 function sendToClient(msg: WebSocketMessage): void {
   if (wsClient?.readyState === WebSocket.OPEN) {
     wsClient.send(JSON.stringify(msg));
@@ -423,7 +430,7 @@ export function startServer(cbs: ServerCallbacks): void {
     serverEvents.emit('connection-changed', true);
 
     // Send AI config status on connection
-    sendToClient({ type: 'ai-config', aiEnabled: isAIEnabled() });
+    sendToClient({ type: 'ai-config', aiEnabled: isAIEnabled(), agentEnabled: isAgentEnabled() });
     // Send history on connection
     sendToClient({ type: 'history', history: loadHistory().slice(0, 20) });
 
@@ -471,6 +478,35 @@ export function startServer(cbs: ServerCallbacks): void {
           sendToClient({ type: 'ack', id: msg.id });
         }
         
+        else if (msg.type === 'agent' && msg.content) {
+          // Agent 模式：AI 自主决策如何处理用户输入
+          try {
+            const result = await runAgent(msg.content, { execute: msg.execute });
+
+            // 如果 agent 调用了 typeText，记录历史
+            if (result.typedText) {
+              addTextHistory(result.typedText);
+            }
+
+            sendToClient({
+              type: 'agent-done',
+              id: msg.id,
+              steps: result.steps,
+              typedText: result.typedText,
+              replyMessage: result.replyMessage,
+              content: result.text,
+            });
+          } catch (err) {
+            const errorMessage = err instanceof Error ? err.message : 'Agent 处理失败';
+            console.warn('Agent failed:', err);
+            sendToClient({
+              type: 'error',
+              id: msg.id,
+              error: errorMessage,
+            });
+          }
+        }
+
         else if (msg.type === 'optimize' && msg.content) {
           // Request AI optimization, return result for preview
           try {
@@ -548,5 +584,5 @@ export function getState(): ServerState {
 
 // Notify client when AI config changes
 export function notifyAIConfigChanged(): void {
-  sendToClient({ type: 'ai-config', aiEnabled: isAIEnabled() });
+  sendToClient({ type: 'ai-config', aiEnabled: isAIEnabled(), agentEnabled: isAgentEnabled() });
 }

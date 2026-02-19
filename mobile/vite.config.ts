@@ -30,6 +30,8 @@ export default defineConfig({
   },
   resolve: {
     alias: {
+      '@': resolve(__dirname, '../src'),
+      '@ui': resolve(__dirname, '../src/components/ui'),
       '@shared': resolve(__dirname, '../shared')
     }
   }
