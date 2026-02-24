@@ -80,6 +80,7 @@ interface ElectronAPI {
   getServerInfo: () => Promise<ServerState>;
   generateQRCode: (url: string) => Promise<string>;
   windowMinimize: () => void;
+  windowMaximize: () => void;
   windowClose: () => void;
   getAIConfig: () => Promise<AIConfig>;
   saveAIConfig: (config: Partial<AIConfig>) => Promise<AIConfig>;
@@ -107,6 +108,7 @@ interface ElectronAPI {
   onChatToolResult: (callback: (data: { chatId: string; toolName: string; result: unknown }) => void) => () => void;
   onChatDone: (callback: (data: { chatId: string; content: string; steps: AgentStepInfo[] }) => void) => () => void;
   onChatError: (callback: (data: { chatId: string; error: string }) => void) => () => void;
+  onChatInputFromMobile: (callback: (content: string) => void) => () => void;
 }
 
 declare global {

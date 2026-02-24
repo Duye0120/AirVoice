@@ -14,6 +14,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getServerInfo: () => ipcRenderer.invoke('get-server-info'),
   generateQRCode: (url: string) => ipcRenderer.invoke('generate-qrcode', url),
   windowMinimize: () => ipcRenderer.send('window-minimize'),
+  windowMaximize: () => ipcRenderer.send('window-maximize'),
   windowClose: () => ipcRenderer.send('window-close'),
   getAIConfig: () => ipcRenderer.invoke('get-ai-config'),
   saveAIConfig: (config: Record<string, unknown>) => ipcRenderer.invoke('save-ai-config', config),
@@ -60,5 +61,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
     const handler = (_: Electron.IpcRendererEvent, data: { chatId: string; error: string }) => callback(data);
     ipcRenderer.on('chat-error', handler);
     return () => ipcRenderer.removeListener('chat-error', handler);
+  },
+  onChatInputFromMobile: (callback: (content: string) => void) => {
+    const handler = (_: Electron.IpcRendererEvent, content: string) => callback(content);
+    ipcRenderer.on('chat-input-from-mobile', handler);
+    return () => ipcRenderer.removeListener('chat-input-from-mobile', handler);
   },
 });

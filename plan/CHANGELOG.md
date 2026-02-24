@@ -12,6 +12,67 @@
 
 ## 更新记录
 
+### 2026-02-24 - UI 架构重构：Sidebar + Dialog 模式
+
+**功能描述：**
+- `assistant-runtime-provider.tsx` 重构：接受 `sessionId`/`onSessionChange` props，支持外部切换会话
+- 修复 `ThreadMessageLike` readonly status 赋值问题
+- App.tsx 侧边栏改为：品牌头 + 新建对话按钮 | 会话列表（可滚动）| 底部设置/手机连接图标
+- 设置和手机连接改为 Dialog 弹窗，不再占用侧边栏 tab
+- 新增最大化窗口按钮（titlebar）
+- main-content 去除 padding，Thread 组件全高显示
+- 新增 sidebar-sessions、session-item、sidebar-bottom、sidebar-bottom-btn CSS
+
+**修改的文件：**
+- `src/App.tsx` - 全量重构：Sidebar 会话列表 + Dialog 设置/手机连接
+- `src/components/assistant-runtime-provider.tsx` - sessionId/onSessionChange props + readonly fix
+- `src/components/tool-fallback.tsx` - 修复语法错误
+- `src/index.css` - 新增 sidebar 会话列表/底部栏 CSS，main-content 去 padding
+- `src/types/electron.d.ts` - 新增 windowMaximize 类型
+- `electron/main.ts` - 新增 window-maximize IPC + F12 devtools toggle
+- `electron/preload.ts` - 新增 windowMaximize API
+
+
+### 2026-02-19 - PC-First AI Agent 重构（Phase 1）
+
+**功能描述：**
+- 将 AirVoice 从"手机远程输入工具"重构为 PC-First AI Agent 桌面应用
+- PC 端主界面改为 Chat 对话模式，作为 AI Agent 核心交互入口
+- Agent 新增 7 个文件系统工具：readFile、writeFile、editFile、listDir、searchContent、findFiles、bash
+- Agent 支持多轮对话历史，上下文连贯
+- 手机端变为可选的语音输入设备：扫码连接后，语音输入注入 PC Chat 输入框
+- 新增 Chat 会话管理：创建/切换/删除会话，持久化存储
+- Chat 界面支持流式消息显示、工具调用可视化（Agent 步骤折叠）
+- 侧边栏精简为 3 个 tab：Chat（默认）、设置、手机连接
+
+**技术实现：**
+- `electron/tools/` 目录：7 个独立工具文件 + index.ts 统一导出
+- `electron/agent.ts` 重构：使用 allTools（13 个工具），支持 messages 历史，stepCountIs(10)
+- `electron/chat.ts` 新增：Chat 会话 CRUD + 持久化到 chat-sessions.json
+- `electron/preload.ts` 扩展：12 个新 Chat IPC 方法 + 流式事件监听
+- `electron/main.ts` 扩展：Chat IPC handlers + 手机 chat-input 转发
+- `electron/server.ts` 扩展：chat-input WebSocket 消息处理
+- `src/App.tsx` 全量重构：Chat UI + 设置页 + 手机连接页
+- `shared/types.ts` 扩展：ChatMessage、ChatSession、chat-* WebSocket 消息类型
+
+**修改的文件：**
+- `electron/agent.ts` - 重构，使用 allTools + 消息历史
+- `electron/chat.ts` - 新增，Chat 会话管理
+- `electron/tools/` - 新增目录，7 个文件系统工具
+- `electron/main.ts` - Chat IPC handlers + chat-input 转发
+- `electron/preload.ts` - Chat API + 流式事件 + onChatInputFromMobile
+- `electron/server.ts` - chat-input WebSocket handler
+- `electron/types.ts` - ChatMessage、ChatSession 类型
+- `shared/types.ts` - Chat 相关 WebSocket 消息类型
+- `src/App.tsx` - 全量重构为 Chat-first UI
+- `src/index.css` - Chat 相关样式
+- `src/types/electron.d.ts` - Chat API 类型定义
+
+**注意事项：**
+- 所有 3 个 build target 验证通过（electron + renderer + mobile）
+- 手机端现有功能（文字输入、图片发送、AI 优化）保持不变
+- Agent 模式需要配置 API Key
+
 ### 2026-02-19 - PC 端 Chat 界面重构
 
 **功能描述：**

@@ -128,14 +128,14 @@ ipcMain.handle('send-chat-message', async (_, content: string, sessionId?: strin
   runAgent(content, { history }).then((result) => {
     const steps: AgentStepInfo[] = result.steps;
     updateMessage(session.id, chatId, {
-      content: result.replyMessage || result.text || '',
+      content: (result.replyMessage || result.text || '').replace(/<think>[\s\S]*?<\/think>/g, '').trim(),
       steps,
       streaming: false,
     });
     if (mainWindow) {
       mainWindow.webContents.send('chat-done', {
         chatId,
-        content: result.replyMessage || result.text || '',
+        content: (result.replyMessage || result.text || '').replace(/<think>[\s\S]*?<\/think>/g, '').trim(),
         steps,
       });
     }
@@ -167,11 +167,24 @@ function createQRWindow(): void {
   });
 
   mainWindow.loadFile(path.join(__dirname, '../renderer/index.html'));
+  mainWindow.webContents.on('before-input-event', (_, input) => {
+    if (input.key === 'F12') {
+      mainWindow?.webContents.toggleDevTools();
+    }
+  });
   mainWindow.on('closed', () => { mainWindow = null; });
 }
 
 ipcMain.on('window-minimize', () => {
   mainWindow?.minimize();
+});
+
+ipcMain.on('window-maximize', () => {
+  if (mainWindow?.isMaximized()) {
+    mainWindow.unmaximize();
+  } else {
+    mainWindow?.maximize();
+  }
 });
 
 ipcMain.on('window-close', () => {
@@ -216,6 +229,13 @@ app.whenReady().then(() => {
       }).catch((err) => {
         console.warn('Failed to generate QR code on IP change:', err);
       });
+    }
+  });
+
+  // 监听手机端 chat-input，转发到 renderer
+  serverEvents.on('chat-input', (content: string) => {
+    if (mainWindow) {
+      mainWindow.webContents.send('chat-input-from-mobile', content);
     }
   });
 

@@ -542,6 +542,12 @@ export function startServer(cbs: ServerCallbacks): void {
           saveHistory([]);
           sendToClient({ type: 'history', history: [] });
         }
+
+        else if (msg.type === 'chat-input' && msg.content) {
+          // 手机端注入文字到 PC Chat
+          serverEvents.emit('chat-input', msg.content);
+          sendToClient({ type: 'ack', id: msg.id });
+        }
       } catch (err) {
         console.warn('Failed to parse WebSocket message:', err);
       }
